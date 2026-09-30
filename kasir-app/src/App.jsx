@@ -1,10 +1,31 @@
+import { useState } from "react";
 import MenuList from "./components/MenuList";
+import OrderList from "./components/OrderList";
 
 function App() {
+  const [tab, setTab] = useState("pesanan");
+
   return (
     <div style={{ padding: 24, fontFamily: "sans-serif" }}>
       <h1>Kasir Warkopolo</h1>
-      <MenuList />
+
+      <div style={{ marginBottom: 16 }}>
+        <button
+          onClick={() => setTab("pesanan")}
+          style={{ fontWeight: tab === "pesanan" ? "bold" : "normal" }}
+        >
+          Pesanan
+        </button>{" "}
+        <button
+          onClick={() => setTab("menu")}
+          style={{ fontWeight: tab === "menu" ? "bold" : "normal" }}
+        >
+          Kelola Menu
+        </button>
+      </div>
+
+      {tab === "pesanan" && <OrderList />}
+      {tab === "menu" && <MenuList />}
     </div>
   );
 }
