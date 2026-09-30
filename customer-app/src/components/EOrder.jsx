@@ -1,0 +1,583 @@
+import { useEffect, useState } from "react";
+import { orderMenu as menu, categoryFilters } from "../data/orderMenu";
+import { tables } from "../data/tables";
+import FloorPlan from "./FloorPlan";
+
+const BLUE = "#0C5CB8";
+const NAVY = "#0B2A4A";
+const MUTED = "#6B7A90";
+const LINE = "#E6EBF2";
+const SOFT = "#EEF2F8";
+
+const rp = (n) => "Rp" + n.toLocaleString("id-ID");
+
+const modes = [
+  { key: "dine", label: "Makan di sini" },
+  { key: "pickup", label: "Ambil" },
+  { key: "delivery", label: "Antar" },
+];
+const payments = ["QRIS", "OVO", "Di kasir"];
+
+const keyframes = `
+@keyframes eo-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes eo-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes eo-fade { from { opacity: 0; } to { opacity: 1; } }
+`;
+
+const s = {
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 100,
+    background: "rgba(11,42,74,0.45)",
+    animation: "eo-fade .2s ease-out",
+  },
+  panel: {
+    position: "fixed",
+    background: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    boxShadow: "0 -8px 40px rgba(11,42,74,0.25)",
+    color: NAVY,
+  },
+  sheet: {
+    left: 0,
+    right: 0,
+    bottom: 0,
+    margin: "0 auto",
+    width: "100%",
+    maxWidth: 520,
+    height: "92vh",
+    borderRadius: "28px 28px 0 0",
+    animation: "eo-up .28s ease-out",
+  },
+  drawer: {
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 440,
+    borderRadius: 0,
+    animation: "eo-in .28s ease-out",
+  },
+  grab: { width: 44, height: 5, borderRadius: 3, background: "#CBD5E3", margin: "10px auto 0" },
+  head: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px" },
+  headBlue: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "16px 20px",
+    background: BLUE,
+    color: "#fff",
+  },
+  title: { margin: 0, fontSize: 24, fontWeight: 800 },
+  titleBlue: { margin: 0, fontSize: 18, fontWeight: 700 },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    border: "none",
+    borderRadius: "50%",
+    background: SOFT,
+    color: NAVY,
+    fontSize: 18,
+    cursor: "pointer",
+  },
+  closeBtnBlue: {
+    width: 40,
+    height: 40,
+    border: "none",
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.18)",
+    color: "#fff",
+    fontSize: 18,
+    cursor: "pointer",
+  },
+  body: { flex: 1, overflowY: "auto", padding: "0 20px 16px" },
+  footer: { padding: 16, borderTop: `1px solid ${LINE}`, background: "#fff" },
+  search: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 14px 12px 42px",
+    border: `1px solid ${LINE}`,
+    borderRadius: 14,
+    fontSize: 15,
+    outline: "none",
+    color: NAVY,
+  },
+  chips: { display: "flex", gap: 8, overflowX: "auto", padding: "14px 0", whiteSpace: "nowrap" },
+  chip: {
+    flexShrink: 0,
+    padding: "8px 16px",
+    borderRadius: 999,
+    border: `1px solid ${LINE}`,
+    background: "#fff",
+    color: NAVY,
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  chipOn: { background: BLUE, borderColor: BLUE, color: "#fff" },
+  row: { display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: `1px solid ${LINE}` },
+  thumb: { width: 64, height: 64, flexShrink: 0, borderRadius: 14 },
+  rowInfo: { flex: 1, minWidth: 0 },
+  rowName: { margin: 0, fontSize: 16, fontWeight: 800 },
+  rowDesc: { margin: "2px 0 4px", fontSize: 13, color: MUTED },
+  rowPrice: { margin: 0, fontSize: 14, fontWeight: 800, color: BLUE },
+  stepper: { display: "flex", alignItems: "center", gap: 10 },
+  stepBtn: {
+    width: 32,
+    height: 32,
+    border: `1px solid ${LINE}`,
+    borderRadius: 10,
+    background: "#fff",
+    color: NAVY,
+    fontSize: 18,
+    cursor: "pointer",
+  },
+  stepBtnOn: {
+    width: 32,
+    height: 32,
+    border: "none",
+    borderRadius: 10,
+    background: BLUE,
+    color: "#fff",
+    fontSize: 18,
+    cursor: "pointer",
+  },
+  qty: { minWidth: 14, textAlign: "center", fontWeight: 700 },
+  addBtn: {
+    width: 36,
+    height: 36,
+    border: `2px solid ${BLUE}`,
+    borderRadius: 10,
+    background: "#fff",
+    color: BLUE,
+    fontSize: 20,
+    cursor: "pointer",
+  },
+  primary: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "16px 20px",
+    border: "none",
+    borderRadius: 16,
+    background: BLUE,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  secondary: {
+    width: "100%",
+    marginTop: 10,
+    padding: "14px 0",
+    border: `1px solid ${LINE}`,
+    borderRadius: 16,
+    background: "#fff",
+    color: NAVY,
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  section: { margin: "22px 0 10px", fontSize: 17, fontWeight: 800 },
+  segment: { display: "flex", padding: 4, borderRadius: 14, background: SOFT },
+  seg: {
+    flex: 1,
+    padding: "10px 0",
+    border: "none",
+    borderRadius: 10,
+    background: "transparent",
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  segOn: { background: "#fff", color: BLUE, boxShadow: "0 1px 4px rgba(11,42,74,0.12)" },
+  payRow: { display: "flex", gap: 10 },
+  pay: {
+    flex: 1,
+    padding: "12px 0",
+    border: `1px solid ${LINE}`,
+    borderRadius: 12,
+    background: "#fff",
+    color: NAVY,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  payOn: { borderColor: BLUE, background: "#EAF2FC", color: BLUE },
+  hint: { margin: "0 0 10px", fontSize: 13, color: MUTED, textAlign: "center" },
+  empty: { padding: "48px 0", textAlign: "center", color: MUTED },
+  doneWrap: { textAlign: "center", paddingTop: 28 },
+  doneRing: {
+    width: 104,
+    height: 104,
+    margin: "0 auto",
+    borderRadius: "50%",
+    background: "#DCE9F8",
+    display: "grid",
+    placeItems: "center",
+  },
+  doneDot: {
+    width: 72,
+    height: 72,
+    borderRadius: "50%",
+    background: BLUE,
+    color: "#fff",
+    fontSize: 36,
+    display: "grid",
+    placeItems: "center",
+  },
+  receipt: {
+    marginTop: 24,
+    padding: 18,
+    border: "1px dashed #B9C8DD",
+    borderRadius: 18,
+    background: "#F7FAFE",
+    textAlign: "left",
+  },
+  code: { margin: "0 0 12px", textAlign: "center", fontSize: 22, fontWeight: 800, color: BLUE },
+  info: { display: "flex", justifyContent: "space-between", gap: 16, padding: "5px 0", fontSize: 14 },
+};
+
+function useIsDesktop() {
+  const query = "(min-width: 900px)";
+  const [match, setMatch] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const onChange = (e) => setMatch(e.matches);
+    m.addEventListener("change", onChange);
+    return () => m.removeEventListener("change", onChange);
+  }, []);
+  return match;
+}
+
+function Stepper({ qty, onChange }) {
+  return (
+    <div style={s.stepper}>
+      <button type="button" aria-label="Kurangi" style={s.stepBtn} onClick={() => onChange(qty - 1)}>
+        −
+      </button>
+      <span style={s.qty}>{qty}</span>
+      <button type="button" aria-label="Tambah" style={s.stepBtnOn} onClick={() => onChange(qty + 1)}>
+        +
+      </button>
+    </div>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div style={s.info}>
+      <span style={{ color: MUTED }}>{label}</span>
+      <strong style={{ textAlign: "right" }}>{value}</strong>
+    </div>
+  );
+}
+
+export default function EOrder({
+  initialStep = "menu",
+  cart,
+  addToCart,
+  removeFromCart,
+  clearCart,
+  onClose,
+}) {
+  const desktop = useIsDesktop();
+  const [step, setStep] = useState(initialStep);
+  const [query, setQuery] = useState("");
+  const [cat, setCat] = useState("Semua");
+  const [mode, setMode] = useState("dine");
+  const [table, setTable] = useState(null);
+  const [pay, setPay] = useState("QRIS");
+  const [order, setOrder] = useState(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const qtyOf = (id) => cart.find((i) => i.cartId === id)?.qty ?? 0;
+
+  // Stepper berubah 1 per ketukan: lebih besar = tambah, lebih kecil = kurangi
+  const changeQty = (item, q) => {
+    const current = qtyOf(item.id);
+    if (q > current) addToCart({ cartId: item.id, name: item.name, price: item.price });
+    else if (q < current) removeFromCart(item.id);
+  };
+
+  const lines = cart.map((i) => ({
+    id: i.cartId,
+    name: i.name,
+    price: i.price,
+    qty: i.qty,
+    color: menu.find((m) => m.id === i.cartId)?.color ?? "#C9D6E8",
+  }));
+  const count = lines.reduce((a, l) => a + l.qty, 0);
+  const total = lines.reduce((a, l) => a + l.qty * l.price, 0);
+  const needTable = mode === "dine" && table === null;
+  const canPay = lines.length > 0 && !needTable;
+
+  const shown = menu.filter(
+    (m) =>
+      (cat === "Semua" || m.category === cat) &&
+      m.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const handlePay = () => {
+    const t = tables.find((x) => x.id === table);
+    setOrder({
+      code: "ORD-" + Math.floor(1000 + Math.random() * 9000),
+      place: mode === "dine" && t ? `Meja ${t.id}, ${t.seats} kursi` : modes.find((m) => m.key === mode).label,
+      names: lines.map((l) => l.name).join(", "),
+      total,
+    });
+    clearCart();
+    setStep("done");
+  };
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <style>{keyframes}</style>
+
+      <section
+        role="dialog"
+        aria-modal="true"
+        style={{ ...s.panel, ...(desktop ? s.drawer : s.sheet) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ---------- LANGKAH 1: MENU ---------- */}
+        {step === "menu" && (
+          <>
+            {!desktop && <div style={s.grab} />}
+            <div style={s.head}>
+              <h2 style={s.title}>Menu</h2>
+              <button type="button" aria-label="Tutup" style={s.closeBtn} onClick={onClose}>
+                ✕
+              </button>
+            </div>
+
+            <div style={s.body}>
+              <div style={{ position: "relative" }}>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={MUTED}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  style={{ position: "absolute", left: 14, top: 14 }}
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4.3-4.3" />
+                </svg>
+                <input
+                  style={s.search}
+                  placeholder="Cari menu"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+
+              <div style={s.chips}>
+                {categoryFilters.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    style={{ ...s.chip, ...(cat === c ? s.chipOn : null) }}
+                    onClick={() => setCat(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              {shown.length === 0 && <div style={s.empty}>Menu tidak ditemukan</div>}
+
+              {shown.map((m) => {
+                const qty = qtyOf(m.id);
+                return (
+                  <div key={m.id} style={s.row}>
+                    <div style={{ ...s.thumb, background: m.color }} />
+                    <div style={s.rowInfo}>
+                      <h3 style={s.rowName}>{m.name}</h3>
+                      <p style={s.rowDesc}>{m.desc}</p>
+                      <p style={s.rowPrice}>{rp(m.price)}</p>
+                    </div>
+                    {qty === 0 ? (
+                      <button
+                        type="button"
+                        aria-label={`Tambah ${m.name}`}
+                        style={s.addBtn}
+                        onClick={() => changeQty(m, 1)}
+                      >
+                        +
+                      </button>
+                    ) : (
+                      <Stepper qty={qty} onChange={(q) => changeQty(m, q)} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {count > 0 && (
+              <div style={s.footer}>
+                <button type="button" style={s.primary} onClick={() => setStep("cart")}>
+                  <span style={{ textAlign: "left", fontSize: 13 }}>
+                    {count} item
+                    <br />
+                    <strong style={{ fontSize: 16 }}>{rp(total)}</strong>
+                  </span>
+                  <span>Lihat keranjang</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ---------- LANGKAH 2: KERANJANG ---------- */}
+        {step === "cart" && (
+          <>
+            <div style={s.headBlue}>
+              <button type="button" aria-label="Kembali ke menu" style={s.closeBtnBlue} onClick={() => setStep("menu")}>
+                ‹
+              </button>
+              <h2 style={s.titleBlue}>Keranjang</h2>
+              <button type="button" aria-label="Tutup" style={s.closeBtnBlue} onClick={onClose}>
+                ✕
+              </button>
+            </div>
+
+            <div style={s.body}>
+              {lines.length === 0 ? (
+                <div style={s.empty}>
+                  Keranjang masih kosong
+                  <button type="button" style={{ ...s.secondary, marginTop: 16 }} onClick={() => setStep("menu")}>
+                    Pilih menu
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ paddingTop: 8 }}>
+                    {lines.map((l) => (
+                      <div key={l.id} style={{ ...s.row, borderBottom: "none", padding: "10px 0" }}>
+                        <div style={{ ...s.thumb, width: 48, height: 48, borderRadius: 12, background: l.color }} />
+                        <div style={s.rowInfo}>
+                          <h3 style={s.rowName}>{l.name}</h3>
+                          <p style={s.rowPrice}>{rp(l.price)}</p>
+                        </div>
+                        <Stepper qty={l.qty} onChange={(q) => changeQty(l, q)} />
+                      </div>
+                    ))}
+                  </div>
+
+                  <h3 style={s.section}>Cara pesan</h3>
+                  <div style={s.segment}>
+                    {modes.map((m) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        style={{ ...s.seg, ...(mode === m.key ? s.segOn : null) }}
+                        onClick={() => setMode(m.key)}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {mode === "dine" && (
+                    <>
+                      <h3 style={s.section}>Pilih meja</h3>
+                      <FloorPlan selected={table} onSelect={setTable} />
+                    </>
+                  )}
+
+                  <h3 style={s.section}>Cara bayar</h3>
+                  <div style={s.payRow}>
+                    {payments.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        style={{ ...s.pay, ...(pay === p ? s.payOn : null) }}
+                        onClick={() => setPay(p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {lines.length > 0 && (
+              <div style={s.footer}>
+                {needTable && <p style={s.hint}>Pilih meja di denah dulu</p>}
+                <button
+                  type="button"
+                  disabled={!canPay}
+                  style={{
+                    ...s.primary,
+                    justifyContent: "center",
+                    opacity: canPay ? 1 : 0.5,
+                    cursor: canPay ? "pointer" : "not-allowed",
+                  }}
+                  onClick={handlePay}
+                >
+                  Bayar {rp(total)}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ---------- LANGKAH 3: PESANAN DITERIMA ---------- */}
+        {step === "done" && order && (
+          <>
+            <div style={s.headBlue}>
+              <span style={{ width: 40 }} />
+              <h2 style={s.titleBlue}>e-Order</h2>
+              <button type="button" aria-label="Tutup" style={s.closeBtnBlue} onClick={onClose}>
+                ✕
+              </button>
+            </div>
+
+            <div style={s.body}>
+              <div style={s.doneWrap}>
+                <div style={s.doneRing}>
+                  <div style={s.doneDot}>✓</div>
+                </div>
+                <h2 style={{ margin: "16px 0 4px", fontSize: 26, fontWeight: 800 }}>Pesanan diterima</h2>
+                <p style={{ margin: 0, color: MUTED }}>Dapur sedang menyiapkan pesananmu.</p>
+              </div>
+
+              <div style={s.receipt}>
+                <h3 style={s.code}>{order.code}</h3>
+                <Info label={order.place.startsWith("Meja") ? "Meja" : "Cara pesan"} value={order.place} />
+                <Info label="Pesanan" value={order.names} />
+                <Info label="Estimasi" value="Sekitar 15 menit" />
+                <Info label="Total" value={rp(order.total)} />
+              </div>
+            </div>
+
+            <div style={s.footer}>
+              <button type="button" style={{ ...s.primary, justifyContent: "center" }} onClick={onClose}>
+                Lihat status pesanan
+              </button>
+              <button type="button" style={s.secondary} onClick={() => setStep("menu")}>
+                Tambah pesanan
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
