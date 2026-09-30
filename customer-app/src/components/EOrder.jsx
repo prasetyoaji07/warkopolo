@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { orderMenu as menu, categoryFilters } from "../data/orderMenu";
-import { tables } from "../data/tables";
+import { tables as layout } from "../data/tables";
 import FloorPlan from "./FloorPlan";
 
 const BLUE = "#0C5CB8";
@@ -10,6 +9,17 @@ const LINE = "#E6EBF2";
 const SOFT = "#EEF2F8";
 
 const rp = (n) => "Rp" + n.toLocaleString("id-ID");
+
+// Blok warna pengganti gambar, satu warna per kategori
+const COLORS = {
+  cocktail: "#8E6BBF",
+  mocktail: "#5FA37F",
+  snack: "#E3A574",
+  food: "#D9B45A",
+  coffee: "#8A5A3C",
+  dessert: "#D98A9C",
+};
+const labelOf = (k) => k.charAt(0).toUpperCase() + k.slice(1);
 
 const modes = [
   { key: "dine", label: "Makan di sini" },
@@ -293,6 +303,61 @@ export default function EOrder({
   const [table, setTable] = useState(null);
   const [pay, setPay] = useState("QRIS");
   const [order, setOrder] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [payError, setPayError] = useState("");
+
+  // Menu diambil dari backend (menggantikan data statis orderMenu.js)
+  const [menu, setMenu] = useState([]);
+  const [menuError, setMenuError] = useState(false);
+
+  useEffect(() => {
+    async function loadMenu() {
+      try {
+        const res = await fetch("http://localhost:5000/products");
+        if (!res.ok) throw new Error(`Server membalas ${res.status}`);
+        const data = await res.json();
+        setMenu(
+          data.map((p) => ({
+            id: p.id,
+            name: p.nama,
+            price: p.harga,
+            category: labelOf(p.kategori),
+            desc: `★ ${p.rating} · ${p.reviews} penilaian`,
+            color: COLORS[p.kategori] ?? "#C9D6E8",
+          }))
+        );
+        setMenuError(false);
+      } catch (err) {
+        console.error("Gagal memuat menu untuk e-Order:", err);
+        setMenuError(true);
+      }
+    }
+    loadMenu();
+  }, []);
+
+  const categoryFilters = ["Semua", ...new Set(menu.map((m) => m.category))];
+
+  // Status meja dari backend, digabung dengan posisi & kursi dari data/tables.js
+  const [dbTables, setDbTables] = useState([]);
+
+  useEffect(() => {
+    async function loadTables() {
+      try {
+        const res = await fetch("http://localhost:5000/tables");
+        if (!res.ok) throw new Error(`Server membalas ${res.status}`);
+        setDbTables(await res.json());
+      } catch (err) {
+        console.error("Gagal memuat status meja:", err);
+      }
+    }
+    loadTables();
+  }, []);
+
+  // Meja yang belum ada di database dianggap terisi (tidak bisa dipilih)
+  const floor = layout.map((t) => {
+    const d = dbTables.find((x) => x.id === t.id);
+    return { ...t, status: d ? d.status : "terisi" };
+  });
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -321,7 +386,7 @@ export default function EOrder({
   const count = lines.reduce((a, l) => a + l.qty, 0);
   const total = lines.reduce((a, l) => a + l.qty * l.price, 0);
   const needTable = mode === "dine" && table === null;
-  const canPay = lines.length > 0 && !needTable;
+  const canPay = lines.length > 0 && mode === "dine" && !needTable && !sending;
 
   const shown = menu.filter(
     (m) =>
@@ -329,16 +394,38 @@ export default function EOrder({
       m.name.toLowerCase().includes(query.toLowerCase())
   );
 
-  const handlePay = () => {
-    const t = tables.find((x) => x.id === table);
-    setOrder({
-      code: "ORD-" + Math.floor(1000 + Math.random() * 9000),
-      place: mode === "dine" && t ? `Meja ${t.id}, ${t.seats} kursi` : modes.find((m) => m.key === mode).label,
-      names: lines.map((l) => l.name).join(", "),
-      total,
-    });
-    clearCart();
-    setStep("done");
+  const handlePay = async () => {
+    if (sending) return;
+    setSending(true);
+    setPayError("");
+
+    try {
+      const res = await fetch("http://localhost:5000/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meja_id: table,
+          items: lines.map((l) => ({ product_id: l.id, qty: l.qty })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Server membalas ${res.status}`);
+
+      const t = floor.find((x) => x.id === table);
+      setOrder({
+        code: "ORD-" + data.id,
+        place: `Meja ${t.id}, ${t.seats} kursi`,
+        names: lines.map((l) => l.name).join(", "),
+        total,
+      });
+      clearCart();
+      setStep("done");
+    } catch (err) {
+      console.error("Gagal mengirim pesanan:", err);
+      setPayError(err.message);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -399,7 +486,8 @@ export default function EOrder({
                 ))}
               </div>
 
-              {shown.length === 0 && <div style={s.empty}>Menu tidak ditemukan</div>}
+              {menuError && <div style={s.empty}>Gagal memuat menu. Pastikan backend berjalan.</div>}
+              {!menuError && shown.length === 0 && <div style={s.empty}>Menu tidak ditemukan</div>}
 
               {shown.map((m) => {
                 const qty = qtyOf(m.id);
@@ -496,7 +584,7 @@ export default function EOrder({
                   {mode === "dine" && (
                     <>
                       <h3 style={s.section}>Pilih meja</h3>
-                      <FloorPlan selected={table} onSelect={setTable} />
+                      <FloorPlan tables={floor} selected={table} onSelect={setTable} />
                     </>
                   )}
 
@@ -519,7 +607,9 @@ export default function EOrder({
 
             {lines.length > 0 && (
               <div style={s.footer}>
-                {needTable && <p style={s.hint}>Pilih meja di denah dulu</p>}
+                {mode !== "dine" && <p style={s.hint}>Untuk saat ini pesan di tempat saja</p>}
+                {needTable && mode === "dine" && <p style={s.hint}>Pilih meja di denah dulu</p>}
+                {payError && <p style={{ ...s.hint, color: "#C0392B" }}>{payError}</p>}
                 <button
                   type="button"
                   disabled={!canPay}
@@ -531,7 +621,7 @@ export default function EOrder({
                   }}
                   onClick={handlePay}
                 >
-                  Bayar {rp(total)}
+                  {sending ? "Mengirim..." : `Bayar ${rp(total)}`}
                 </button>
               </div>
             )}

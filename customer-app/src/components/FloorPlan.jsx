@@ -1,5 +1,3 @@
-import { tables } from "../data/tables";
-
 const BLUE = "#0C5CB8";
 const NAVY = "#0B2A4A";
 
@@ -66,13 +64,13 @@ function Swatch({ bg, border }) {
   );
 }
 
-export default function FloorPlan({ selected, onSelect }) {
+export default function FloorPlan({ tables, selected, onSelect }) {
   return (
     <div style={s.room}>
       <div style={s.bar}>Kasir &amp; bar</div>
 
       {tables.map((t) => {
-        const taken = t.status === "taken";
+        const taken = t.status === "terisi";
         const on = selected === t.id;
         return (
           <button

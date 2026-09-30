@@ -63,7 +63,7 @@ function Home({ onAddToCart }) {
           <ProductCard
             key={p.id}
             {...p}
-            onAddToCart={() => onAddToCart({ ...p, cartId: `home-${p.id}` })}
+            onAddToCart={() => onAddToCart({ ...p, cartId: p.id })}
           />
         ))}
       </section>
