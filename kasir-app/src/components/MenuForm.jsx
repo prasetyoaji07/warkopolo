@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API } from "../config";
 
 const KATEGORI = ["cocktail", "mocktail", "snack", "food", "coffee", "dessert"];
 const KOSONG = { nama: "", harga: "", kategori: "food", gambar: "" };
@@ -20,8 +21,8 @@ function MenuForm({ editing, onSaved, onCancel }) {
   async function handleSubmit(e) {
     e.preventDefault();
     const url = editing
-      ? `http://localhost:5000/products/${editing.id}`
-      : "http://localhost:5000/products";
+      ? `${API}/products/${editing.id}`
+      : `${API}/products`;
 
     try {
       const res = await fetch(url, {

@@ -8,6 +8,7 @@ import ProductCard from "./components/ProductCard";
 import Footer from "./components/Footer";
 import EOrder from "./components/EOrder";
 import { img } from "./data/data";
+import { API } from "./config";
 import Menu from "./pages/Menu";
 import BookTable from "./pages/BookTable";
 
@@ -29,7 +30,7 @@ function Home({ onAddToCart }) {
   useEffect(() => {
     async function loadProducts() {
       try {
-        const res = await fetch("http://localhost:5000/products");
+        const res = await fetch(`${API}/products`);
         if (!res.ok) throw new Error(`Server membalas ${res.status}`);
         const data = await res.json();
         const mapped = data.map((item) => ({

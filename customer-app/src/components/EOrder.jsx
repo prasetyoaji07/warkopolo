@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { tables as layout } from "../data/tables";
 import FloorPlan from "./FloorPlan";
+import { API } from "../config";
 
 const BLUE = "#0C5CB8";
 const NAVY = "#0B2A4A";
@@ -313,7 +314,7 @@ export default function EOrder({
   useEffect(() => {
     async function loadMenu() {
       try {
-        const res = await fetch("http://localhost:5000/products");
+        const res = await fetch(`${API}/products`);
         if (!res.ok) throw new Error(`Server membalas ${res.status}`);
         const data = await res.json();
         setMenu(
@@ -343,7 +344,7 @@ export default function EOrder({
   useEffect(() => {
     async function loadTables() {
       try {
-        const res = await fetch("http://localhost:5000/tables");
+        const res = await fetch(`${API}/tables`);
         if (!res.ok) throw new Error(`Server membalas ${res.status}`);
         setDbTables(await res.json());
       } catch (err) {
@@ -400,7 +401,7 @@ export default function EOrder({
     setPayError("");
 
     try {
-      const res = await fetch("http://localhost:5000/orders", {
+      const res = await fetch(`${API}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

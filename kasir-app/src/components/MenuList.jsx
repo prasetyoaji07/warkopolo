@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import MenuForm from "./MenuForm";
-
-const API = "http://localhost:5000";
+import { API } from "../config";
 
 function MenuList() {
   const [products, setProducts] = useState([]);

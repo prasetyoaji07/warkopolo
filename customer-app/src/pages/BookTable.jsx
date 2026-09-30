@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-
-const API = "http://localhost:5000";
+import { API } from "../config";
 
 /* ===== Palet (senada Navbar / Hero / Footer) ===== */
 const BLUE = "#0B5AB4";

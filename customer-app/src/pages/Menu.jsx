@@ -3,9 +3,8 @@ import { NavLink, Link, useParams, useOutletContext } from "react-router-dom";
 import { menu, rp } from "../data/menu";
 import MenuCard, { ItemIcon } from "../components/MenuCard";
 import CartPanel, { CartBar } from "../components/CartPanel";
+import { API } from "../config";
 import "./Menu.css";
-
-const API = "http://localhost:5000";
 
 function Menu() {
   const { kategori } = useParams();
