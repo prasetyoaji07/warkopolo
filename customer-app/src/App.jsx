@@ -30,6 +30,7 @@ function Home({ onAddToCart }) {
     async function loadProducts() {
       try {
         const res = await fetch("http://localhost:5000/products");
+        if (!res.ok) throw new Error(`Server membalas ${res.status}`);
         const data = await res.json();
         const mapped = data.map((item) => ({
           id: item.id,
@@ -44,7 +45,10 @@ function Home({ onAddToCart }) {
         console.error("Gagal mengambil produk dari backend:", err);
       }
     }
-    loadProducts();
+
+    loadProducts(); // panggil sekali saat halaman dibuka
+    const interval = setInterval(loadProducts, 5000); // ulangi tiap 5 detik
+    return () => clearInterval(interval); // bersihkan saat komponen ditutup
   }, []);
 
   return (
@@ -72,35 +76,20 @@ function HomePage() {
   return <Home onAddToCart={addToCart} />;
 }
 
-// Layout untuk Home: tetap memakai zoom seperti sebelumnya
+// Layout untuk Home: desain 900px diperkecil sesuai lebar layar
 function ZoomLayout({ shop }) {
   const [scale, setScale] = useState(1);
 
-useEffect(() => {
-  async function loadProducts() {
-    try {
-      const res = await fetch("http://localhost:5000/products");
-      if (!res.ok) throw new Error(`Server membalas ${res.status}`);
-      const data = await res.json();
-      const mapped = data.map((item) => ({
-        id: item.id,
-        name: item.nama,
-        price: item.harga,
-        rating: item.rating,
-        reviews: item.reviews,
-        image: item.gambar ? img(item.gambar.split(".")[0]) : undefined,
-      }));
-      setProducts(mapped);
-    } catch (err) {
-      console.error("Gagal mengambil produk dari backend:", err);
+  useEffect(() => {
+    function updateScale() {
+      const width = document.documentElement.clientWidth;
+      setScale(Math.min(1, width / DESIGN_WIDTH));
     }
-  }
 
-  loadProducts(); // panggil sekali saat halaman dibuka
-  const interval = setInterval(loadProducts, 5000); // lalu ulangi tiap 5 detik
-
-  return () => clearInterval(interval); // bersihkan saat komponen ditutup
-}, []);
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   return (
     <>

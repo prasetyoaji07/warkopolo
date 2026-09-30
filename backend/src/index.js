@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const db = require("./db");
+const productsRouter = require("./routes/products");
 
 const app = express();
 app.use(cors());
@@ -11,14 +11,7 @@ app.get("/", (req, res) => {
   res.send("Server Warkopolo jalan!");
 });
 
-app.get("/products", async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM products");
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.use("/products", productsRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
