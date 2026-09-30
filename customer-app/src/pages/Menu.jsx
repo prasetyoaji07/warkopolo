@@ -1,14 +1,34 @@
+import { useState, useEffect } from "react";
 import { NavLink, Link, useParams, useOutletContext } from "react-router-dom";
 import { menu, rp } from "../data/menu";
 import MenuCard, { ItemIcon } from "../components/MenuCard";
 import CartPanel, { CartBar } from "../components/CartPanel";
 import "./Menu.css";
 
+const API = "http://localhost:5000";
+
 function Menu() {
   const { kategori } = useParams();
   const { cart, cartCount, cartTotal, addToCart, removeFromCart } =
     useOutletContext();
+  const [products, setProducts] = useState([]);
   const data = menu[kategori];
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch(`${API}/products`);
+        if (!res.ok) throw new Error(`Server membalas ${res.status}`);
+        setProducts(await res.json());
+      } catch (err) {
+        console.error("Gagal mengambil produk dari backend:", err);
+      }
+    }
+
+    loadProducts(); // panggil sekali saat halaman dibuka
+    const interval = setInterval(loadProducts, 5000); // ulangi tiap 5 detik
+    return () => clearInterval(interval); // bersihkan saat komponen ditutup
+  }, []);
 
   if (!data) {
     return (
@@ -19,7 +39,17 @@ function Menu() {
     );
   }
 
-  const cheapest = Math.min(...data.items.map((i) => i.price));
+  // Ambil menu kategori ini dari database, ubah ke bentuk yang dibaca MenuCard
+  const items = products
+    .filter((p) => String(p.kategori).toLowerCase() === kategori)
+    .map((p) => ({
+      id: p.id,
+      name: p.nama,
+      desc: data.items.find((i) => i.name === p.nama)?.desc ?? "",
+      price: Number(p.harga),
+    }));
+
+  const cheapest = items.length > 0 ? Math.min(...items.map((i) => i.price)) : 0;
 
   return (
     <>
@@ -32,7 +62,8 @@ function Menu() {
             </nav>
             <h1 className="mn-title">{data.title}</h1>
             <p className="mn-sub">
-              {data.items.length} menu, mulai {rp(cheapest)}
+              {items.length} menu
+              {items.length > 0 && `, mulai ${rp(cheapest)}`}
             </p>
           </div>
           <div className="mn-hero-icon">
@@ -56,15 +87,13 @@ function Menu() {
           </nav>
 
           <div className="mn-grid">
-            {data.items.map((item, i) => (
+            {items.map((item, i) => (
               <MenuCard
                 key={item.id}
                 item={item}
                 kind={data.kind}
                 tintIndex={i}
-                onAdd={() =>
-                  addToCart({ ...item, cartId: `${kategori}-${item.id}` })
-                }
+                onAdd={() => addToCart({ ...item, cartId: item.id })}
               />
             ))}
           </div>

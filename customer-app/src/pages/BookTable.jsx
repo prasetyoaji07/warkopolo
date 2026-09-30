@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+const API = "http://localhost:5000";
+
 /* ===== Palet (senada Navbar / Hero / Footer) ===== */
 const BLUE = "#0B5AB4";
 const BLUE_DEEP = "#004CA0";
@@ -41,11 +43,6 @@ function buildDates() {
       full: `${DAY_FULL[d.getDay()]}, ${d.getDate()} ${MONTH[d.getMonth()]}`,
     };
   });
-}
-
-// Data dummy: nanti ganti dengan data asli dari backend
-function isBooked(tableId, dateIdx, timeIdx) {
-  return (tableId * 7 + dateIdx * 3 + timeIdx * 5) % 4 === 0;
 }
 
 // Hitung bentuk meja + posisi kursinya
@@ -118,8 +115,35 @@ function BookTable() {
   const [confirmed, setConfirmed] = useState(false);
   const [focusId, setFocusId] = useState(null);
 
+  // Status meja dari backend (polling 5 detik)
+  const [dbTables, setDbTables] = useState([]);
+
+  useEffect(() => {
+    async function loadTables() {
+      try {
+        const res = await fetch(`${API}/tables`);
+        if (!res.ok) throw new Error(`Server membalas ${res.status}`);
+        setDbTables(await res.json());
+      } catch (err) {
+        console.error("Gagal memuat status meja:", err);
+      }
+    }
+
+    loadTables();
+    const interval = setInterval(loadTables, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Status di database adalah kondisi meja SAAT INI, jadi hanya berlaku untuk "Hari ini".
+  // Tanggal lain belum punya data booking, jadi dianggap kosong.
+  const isBooked = (tableId) => {
+    if (dateIdx !== 0) return false;
+    const d = dbTables.find((x) => x.id === tableId);
+    return d ? d.status === "terisi" : false;
+  };
+
   const getStatus = (t) => {
-    if (isBooked(t.id, dateIdx, timeIdx)) return "booked";
+    if (isBooked(t.id)) return "booked";
     if (t.cap < guests) return "small";
     if (t.id === selectedId) return "selected";
     return "free";

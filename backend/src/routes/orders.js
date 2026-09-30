@@ -24,6 +24,22 @@ router.post("/", async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
+    // 0. cek meja: harus ada dan masih kosong (dikunci supaya tidak bentrok)
+    const [mejaRows] = await conn.query(
+      "SELECT status FROM tables WHERE id = ? FOR UPDATE",
+      [meja_id]
+    );
+    if (mejaRows.length === 0) {
+      const err = new Error("Meja tidak ditemukan");
+      err.status = 400;
+      throw err;
+    }
+    if (mejaRows[0].status !== "kosong") {
+      const err = new Error("Meja " + meja_id + " sedang terisi");
+      err.status = 409;
+      throw err;
+    }
+
     // 1. buat baris order (status & created_at terisi otomatis)
     const [orderResult] = await conn.query(
       "INSERT INTO orders (meja_id) VALUES (?)",
