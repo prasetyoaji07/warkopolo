@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import logo from "../assets/warkopolo.png";
 
 const BG = "#0B5AB4";
 const TEXT = "#F3EEF8";
@@ -158,11 +159,7 @@ function Navbar({ cartCount = 0, onOpenMenu, onOpenCart }) {
       <div className="navbar-inner" style={styles.inner}>
         {/* Logo */}
         <Link to="/" style={styles.brand}>
-          <img
-            src="/src/assets/warkopolo.png"
-            alt="Warkopolo"
-            style={styles.logo}
-          />
+          <img src={logo} alt="Warkopolo" style={styles.logo} />
         </Link>
 
         {/* Navigation */}
