@@ -51,7 +51,9 @@ router.post("/", async (req, res) => {
         [it.product_id]
       );
       if (rows.length === 0) {
-        const err = new Error("Menu dengan id " + it.product_id + " tidak ditemukan");
+        const err = new Error(
+          "Menu dengan id " + it.product_id + " tidak ditemukan"
+        );
         err.status = 400;
         throw err;
       }
@@ -61,7 +63,9 @@ router.post("/", async (req, res) => {
       );
     }
 
-    await conn.query("UPDATE tables SET status = 'terisi' WHERE id = ?", [meja_id]);
+    await conn.query("UPDATE tables SET status = 'terisi' WHERE id = ?", [
+      meja_id,
+    ]);
 
     await conn.commit();
     res.status(201).json({ id: orderId, meja_id, status: "pending" });
@@ -109,29 +113,57 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PATCH /orders/:id -> ubah status order
-// Alur Dine-In: pending -> diproses -> disajikan -> selesai
+// PATCH /orders/:id -> ubah status order (hanya urutan yang benar)
+// pending -> diproses -> disajikan -> selesai (meja kosong saat selesai)
+const URUTAN = {
+  pending: "diproses",
+  diproses: "disajikan",
+  disajikan: "selesai",
+};
+
 router.patch("/:id", async (req, res) => {
   const { status } = req.body;
-
-  if (!["pending", "diproses", "disajikan", "selesai"].includes(status)) {
-    return res.status(400).json({
-      error: "status harus 'pending', 'diproses', 'disajikan', atau 'selesai'",
-    });
-  }
-
+  let conn;
   try {
-    const [result] = await db.query(
-      "UPDATE orders SET status = ? WHERE id = ?",
-      [status, req.params.id]
-    );
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Order tidak ditemukan" });
+    const [rows] = await conn.query(
+      "SELECT status, meja_id FROM orders WHERE id = ? FOR UPDATE",
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      const err = new Error("Order tidak ditemukan");
+      err.status = 404;
+      throw err;
     }
+    if (URUTAN[rows[0].status] !== status) {
+      const err = new Error(
+        `Tidak bisa dari '${rows[0].status}' ke '${status}'`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    await conn.query("UPDATE orders SET status = ? WHERE id = ?", [
+      status,
+      req.params.id,
+    ]);
+
+    // Meja hanya dikosongkan saat order selesai
+    if (status === "selesai") {
+      await conn.query("UPDATE tables SET status = 'kosong' WHERE id = ?", [
+        rows[0].meja_id,
+      ]);
+    }
+
+    await conn.commit();
     res.json({ message: "Status order diperbarui" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (conn) await conn.rollback();
+    res.status(err.status || 500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

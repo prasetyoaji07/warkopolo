@@ -33,19 +33,22 @@ function OrderList() {
     return items.reduce((sum, it) => sum + Number(it.harga) * it.qty, 0);
   }
 
-  async function ubahStatus(id, status) {
-    try {
-      const res = await fetch(`${API}/orders/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error(`Server membalas ${res.status}`);
-      loadOrders();
-    } catch (err) {
-      setError("Gagal mengubah status: " + err.message);
+async function ubahStatus(id, status) {
+  try {
+    const res = await fetch(`${API}/orders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Server membalas ${res.status}`);
     }
+    loadOrders();
+  } catch (err) {
+    setError("Gagal mengubah status: " + err.message);
   }
+}
 
   async function selesaikan(order) {
     try {
@@ -116,7 +119,7 @@ function OrderList() {
 
           {o.status === "disajikan" && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => selesaikan(o)}>Pelanggan Selesai</button>
+                 <button onClick={() => ubahStatus(o.id, "selesai")}>Pelanggan Selesai</button>
             </div>
           )}
         </div>
