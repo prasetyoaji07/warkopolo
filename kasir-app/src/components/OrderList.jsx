@@ -108,7 +108,15 @@ function OrderList() {
 
           {o.status === "diproses" && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => selesaikan(o)}>Selesai</button>
+              <button onClick={() => ubahStatus(o.id, "disajikan")}>
+                Sudah Disajikan
+              </button>
+            </div>
+          )}
+
+          {o.status === "disajikan" && (
+            <div style={{ marginTop: 8 }}>
+              <button onClick={() => selesaikan(o)}>Pelanggan Selesai</button>
             </div>
           )}
         </div>

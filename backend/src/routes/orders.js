@@ -24,7 +24,6 @@ router.post("/", async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
-    // 0. cek meja: harus ada dan masih kosong (dikunci supaya tidak bentrok)
     const [mejaRows] = await conn.query(
       "SELECT status FROM tables WHERE id = ? FOR UPDATE",
       [meja_id]
@@ -40,14 +39,12 @@ router.post("/", async (req, res) => {
       throw err;
     }
 
-    // 1. buat baris order (status & created_at terisi otomatis)
     const [orderResult] = await conn.query(
       "INSERT INTO orders (meja_id) VALUES (?)",
       [meja_id]
     );
     const orderId = orderResult.insertId;
 
-    // 2. simpan tiap item, nama & harga diambil dari database
     for (const it of items) {
       const [rows] = await conn.query(
         "SELECT id, nama, harga FROM products WHERE id = ?",
@@ -64,7 +61,6 @@ router.post("/", async (req, res) => {
       );
     }
 
-    // 3. tandai meja terisi
     await conn.query("UPDATE tables SET status = 'terisi' WHERE id = ?", [meja_id]);
 
     await conn.commit();
@@ -97,14 +93,12 @@ router.get("/", async (req, res) => {
       return res.json([]);
     }
 
-    // ambil semua item untuk order-order tadi dalam satu query
     const ids = orders.map((o) => o.id);
     const [items] = await db.query(
       "SELECT order_id, product_id, nama, harga, qty FROM order_items WHERE order_id IN (?)",
       [ids]
     );
 
-    // tempelkan item ke order masing-masing
     const result = orders.map((o) => ({
       ...o,
       items: items.filter((it) => it.order_id === o.id),
@@ -115,14 +109,15 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PATCH /orders/:id -> ubah status order (pending -> diproses -> selesai)
+// PATCH /orders/:id -> ubah status order
+// Alur Dine-In: pending -> diproses -> disajikan -> selesai
 router.patch("/:id", async (req, res) => {
   const { status } = req.body;
 
-  if (!["pending", "diproses", "selesai"].includes(status)) {
-    return res
-      .status(400)
-      .json({ error: "status harus 'pending', 'diproses', atau 'selesai'" });
+  if (!["pending", "diproses", "disajikan", "selesai"].includes(status)) {
+    return res.status(400).json({
+      error: "status harus 'pending', 'diproses', 'disajikan', atau 'selesai'",
+    });
   }
 
   try {
