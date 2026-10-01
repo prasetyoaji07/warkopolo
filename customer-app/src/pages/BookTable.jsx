@@ -17,7 +17,15 @@ const BOOKED_SEAT = "#BDB8B3";
 const DAY = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const DAY_FULL = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-const TIMES = ["10:00", "12:00", "14:00", "16:00", "18:00", "19:00", "20:00", "21:00"];
+
+// Jam operasional: diasumsikan 10:00–21:00 (sama dengan batas TIMES lama).
+// Kalau beda, ubah dua angka ini saja.
+const OPEN_HOUR = 10;
+const CLOSE_HOUR = 21;
+const HOURS = Array.from(
+  { length: CLOSE_HOUR - OPEN_HOUR + 1 },
+  (_, i) => `${String(OPEN_HOUR + i).padStart(2, "0")}:00`
+);
 
 const TABLES = [
   { id: 1, cap: 2, shape: "round", x: 80, y: 110 },
@@ -117,7 +125,17 @@ function BookTable() {
   const isMobile = useIsMobile();
   const dates = useMemo(buildDates, []);
   const [dateIdx, setDateIdx] = useState(0);
-  const [timeIdx, setTimeIdx] = useState(4);
+
+  // Jam: mode "jam genap" (chip HOURS) atau mode "custom" (input bebas)
+  const [selectedTime, setSelectedTime] = useState(
+    HOURS.includes("18:00") ? "18:00" : HOURS[0]
+  );
+  const [customMode, setCustomMode] = useState(false);
+  const [customTime, setCustomTime] = useState("");
+
+  const activeTime = customMode ? customTime : selectedTime;
+  const timeValid = /^\d{2}:\d{2}$/.test(activeTime);
+
   const [guests, setGuests] = useState(2);
   const [selectedId, setSelectedId] = useState(null);
   const [nama, setNama] = useState("");
@@ -132,11 +150,15 @@ function BookTable() {
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
+    if (!timeValid) {
+      setBookedIds([]);
+      return;
+    }
     let batal = false;
     async function loadKetersediaan() {
       try {
         const res = await fetch(
-          `${API}/bookings/ketersediaan?tanggal=${dates[dateIdx].iso}&jam=${TIMES[timeIdx]}`
+          `${API}/bookings/ketersediaan?tanggal=${dates[dateIdx].iso}&jam=${activeTime}`
         );
         if (!res.ok) throw new Error(`Server membalas ${res.status}`);
         const data = await res.json();
@@ -151,7 +173,7 @@ function BookTable() {
       batal = true;
       clearInterval(interval);
     };
-  }, [dateIdx, timeIdx, dates, refresh]);
+  }, [dateIdx, activeTime, timeValid, dates, refresh]);
 
   const getStatus = (t) => {
     if (bookedIds.includes(t.id)) return "booked";
@@ -169,13 +191,32 @@ function BookTable() {
     setError("");
   };
 
+  function selectHour(tm) {
+    setCustomMode(false);
+    setSelectedTime(tm);
+    setConfirmed(null);
+    setError("");
+  }
+
+  function selectCustom() {
+    setCustomMode(true);
+    setConfirmed(null);
+    setError("");
+  }
+
+  function handleCustomTimeChange(e) {
+    setCustomTime(e.target.value);
+    setConfirmed(null);
+    setError("");
+  }
+
   const pickTable = (t) => {
     const status = getStatus(t);
     if (status === "booked" || status === "small" || confirmed) return;
     setSelectedId(status === "selected" ? null : t.id);
   };
 
-  const canSubmit = selected && nama.trim() && noHp.trim() && !sending;
+  const canSubmit = timeValid && selected && nama.trim() && noHp.trim() && !sending;
 
   async function handleBook() {
     if (!canSubmit) return;
@@ -191,7 +232,7 @@ function BookTable() {
           no_hp: noHp.trim(),
           jumlah_orang: guests,
           tanggal: dates[dateIdx].iso,
-          jam: TIMES[timeIdx],
+          jam: activeTime,
         }),
       });
       const data = await res.json();
@@ -279,19 +320,50 @@ function BookTable() {
           </div>
 
           <h4 style={subhead}>Jam</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: isMobile ? 14 : 20 }}>
-            {TIMES.map((tm, i) => (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 8,
+              marginBottom: customMode ? 10 : isMobile ? 14 : 20,
+            }}
+          >
+            {HOURS.map((tm) => (
               <button
                 key={tm}
                 type="button"
-                aria-pressed={timeIdx === i}
-                onClick={() => update(setTimeIdx)(i)}
-                style={{ ...chip(timeIdx === i), padding: "10px 0", fontSize: 14 }}
+                aria-pressed={!customMode && selectedTime === tm}
+                onClick={() => selectHour(tm)}
+                style={{ ...chip(!customMode && selectedTime === tm), padding: "10px 0", fontSize: 14 }}
               >
                 {tm}
               </button>
             ))}
+            <button
+              type="button"
+              aria-pressed={customMode}
+              onClick={selectCustom}
+              style={{ ...chip(customMode), padding: "10px 0", fontSize: 14 }}
+            >
+              Custom
+            </button>
           </div>
+
+          {customMode && (
+            <div style={{ marginBottom: isMobile ? 14 : 20 }}>
+              <input
+                type="time"
+                value={customTime}
+                onChange={handleCustomTimeChange}
+                min={`${pad2(OPEN_HOUR)}:00`}
+                max={`${pad2(CLOSE_HOUR)}:00`}
+                style={{ ...input, marginBottom: 6 }}
+              />
+              <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
+                Jam operasional {pad2(OPEN_HOUR)}.00–{pad2(CLOSE_HOUR)}.00
+              </p>
+            </div>
+          )}
 
           <h4 style={subhead}>Jumlah tamu</h4>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -491,7 +563,7 @@ function BookTable() {
         >
           <div style={{ marginBottom: 12 }}>
             <Row label="Tanggal" value={dates[dateIdx].full} />
-            <Row label="Jam" value={TIMES[timeIdx]} />
+            <Row label="Jam" value={timeValid ? activeTime : "Belum dipilih"} muted={!timeValid} />
             <Row label="Tamu" value={`${guests} orang`} />
             <Row
               label="Meja"
@@ -564,6 +636,8 @@ function BookTable() {
               >
                 {sending
                   ? "Mengirim..."
+                  : !timeValid
+                  ? "Pilih jam dulu"
                   : !selected
                   ? "Pilih meja dulu"
                   : !nama.trim() || !noHp.trim()
