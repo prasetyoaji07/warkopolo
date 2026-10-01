@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config";
 
-/* ===== Palet (senada Navbar / Hero / Footer) ===== */
+/* ===== Palet ===== */
 const BLUE = "#0B5AB4";
 const BLUE_DEEP = "#004CA0";
 const INK = "#0E2A4D";
@@ -32,6 +32,8 @@ const TABLES = [
   { id: 10, cap: 2, shape: "round", x: 490, y: 330 },
 ];
 
+const pad2 = (n) => String(n).padStart(2, "0");
+
 function buildDates() {
   const base = new Date();
   return Array.from({ length: 7 }, (_, i) => {
@@ -40,11 +42,11 @@ function buildDates() {
       short: i === 0 ? "Hari ini" : i === 1 ? "Besok" : DAY[d.getDay()],
       num: d.getDate(),
       full: `${DAY_FULL[d.getDay()]}, ${d.getDate()} ${MONTH[d.getMonth()]}`,
+      iso: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
     };
   });
 }
 
-// Hitung bentuk meja + posisi kursinya
 function getGeometry(t) {
   const { x, y, cap, shape } = t;
 
@@ -96,11 +98,18 @@ const chip = (active) => ({
   transition: "background 0.15s, border-color 0.15s",
 });
 
-const subhead = {
+const subhead = { fontSize: 14, margin: "0 0 10px", color: INK, fontWeight: 700 };
+
+const input = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "11px 12px",
+  border: `1.5px solid ${LINE}`,
+  borderRadius: 12,
   fontSize: 14,
-  margin: "0 0 10px",
   color: INK,
-  fontWeight: 700,
+  outline: "none",
+  marginBottom: 10,
 };
 
 /* ===== Komponen ===== */
@@ -111,50 +120,53 @@ function BookTable() {
   const [timeIdx, setTimeIdx] = useState(4);
   const [guests, setGuests] = useState(2);
   const [selectedId, setSelectedId] = useState(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [nama, setNama] = useState("");
+  const [noHp, setNoHp] = useState("");
+  const [confirmed, setConfirmed] = useState(null); // { kode, mejaId, cap }
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const [focusId, setFocusId] = useState(null);
 
-  // Status meja dari backend (polling 5 detik)
-  const [dbTables, setDbTables] = useState([]);
+  // Meja yang sudah dipesan pada tanggal + jam terpilih (dari backend)
+  const [bookedIds, setBookedIds] = useState([]);
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    async function loadTables() {
+    let batal = false;
+    async function loadKetersediaan() {
       try {
-        const res = await fetch(`${API}/tables`);
+        const res = await fetch(
+          `${API}/bookings/ketersediaan?tanggal=${dates[dateIdx].iso}&jam=${TIMES[timeIdx]}`
+        );
         if (!res.ok) throw new Error(`Server membalas ${res.status}`);
-        setDbTables(await res.json());
+        const data = await res.json();
+        if (!batal) setBookedIds(data);
       } catch (err) {
-        console.error("Gagal memuat status meja:", err);
+        console.error("Gagal memuat ketersediaan meja:", err);
       }
     }
-
-    loadTables();
-    const interval = setInterval(loadTables, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Status di database adalah kondisi meja SAAT INI, jadi hanya berlaku untuk "Hari ini".
-  // Tanggal lain belum punya data booking, jadi dianggap kosong.
-  const isBooked = (tableId) => {
-    if (dateIdx !== 0) return false;
-    const d = dbTables.find((x) => x.id === tableId);
-    return d ? d.status === "terisi" : false;
-  };
+    loadKetersediaan();
+    const interval = setInterval(loadKetersediaan, 5000);
+    return () => {
+      batal = true;
+      clearInterval(interval);
+    };
+  }, [dateIdx, timeIdx, dates, refresh]);
 
   const getStatus = (t) => {
-    if (isBooked(t.id)) return "booked";
+    if (bookedIds.includes(t.id)) return "booked";
     if (t.cap < guests) return "small";
     if (t.id === selectedId) return "selected";
     return "free";
   };
 
-  // Kalau pilihan sebelumnya jadi tidak valid (ganti jam/tamu), otomatis dianggap kosong
   const selected = TABLES.find((t) => t.id === selectedId && getStatus(t) === "selected");
   const freeCount = TABLES.filter((t) => ["free", "selected"].includes(getStatus(t))).length;
 
   const update = (setter) => (value) => {
     setter(value);
-    setConfirmed(false);
+    setConfirmed(null);
+    setError("");
   };
 
   const pickTable = (t) => {
@@ -163,7 +175,45 @@ function BookTable() {
     setSelectedId(status === "selected" ? null : t.id);
   };
 
-  const bookingCode = selected ? `ORD-${selected.id}${dateIdx}${timeIdx}${guests}` : "";
+  const canSubmit = selected && nama.trim() && noHp.trim() && !sending;
+
+  async function handleBook() {
+    if (!canSubmit) return;
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch(`${API}/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meja_id: selected.id,
+          nama: nama.trim(),
+          no_hp: noHp.trim(),
+          jumlah_orang: guests,
+          tanggal: dates[dateIdx].iso,
+          jam: TIMES[timeIdx],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Server membalas ${res.status}`);
+      setConfirmed({ kode: data.kode, mejaId: selected.id, cap: selected.cap });
+      setRefresh((n) => n + 1);
+    } catch (err) {
+      setError(err.message);
+      setRefresh((n) => n + 1);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function bookingBaru() {
+    setConfirmed(null);
+    setSelectedId(null);
+    setNama("");
+    setNoHp("");
+    setError("");
+  }
+
   const cardPad = isMobile ? 16 : 20;
 
   return (
@@ -189,7 +239,7 @@ function BookTable() {
           alignItems: "start",
         }}
       >
-        {/* ===== 1. Pilihan tanggal, jam, tamu ===== */}
+        {/* ===== 1. Tanggal, jam, tamu ===== */}
         <div
           style={{
             order: 1,
@@ -293,24 +343,21 @@ function BookTable() {
               </pattern>
             </defs>
 
-            {/* Kasir & bar (pengganti "layar" di bioskop) */}
             <rect x="110" y="18" width="340" height="38" rx="19" fill={BLUE_DEEP} />
             <text x="280" y="43" textAnchor="middle" fill="#fff" fontSize="15" fontWeight="700">
               Kasir & bar
             </text>
 
-            {/* Pintu masuk */}
             <line x1="28" y1="420" x2="220" y2="420" stroke={INK} strokeWidth="3" strokeLinecap="round" />
             <line x1="340" y1="420" x2="532" y2="420" stroke={INK} strokeWidth="3" strokeLinecap="round" />
             <text x="280" y="425" textAnchor="middle" fill={INK} fontSize="14" fontWeight="600">
               Pintu masuk
             </text>
 
-            {/* Meja */}
             {TABLES.map((t) => {
               const status = getStatus(t);
               const geo = getGeometry(t);
-              const disabled = status === "booked" || status === "small" || confirmed;
+              const disabled = status === "booked" || status === "small" || !!confirmed;
 
               const tableFill =
                 status === "selected" ? BLUE : status === "booked" ? "url(#booked-hatch)" : "#fff";
@@ -321,7 +368,7 @@ function BookTable() {
               const statusLabel = {
                 free: "tersedia",
                 selected: "dipilih",
-                booked: "sudah terisi",
+                booked: "sudah dipesan",
                 small: "terlalu kecil",
               }[status];
 
@@ -348,7 +395,6 @@ function BookTable() {
                     outline: "none",
                   }}
                 >
-                  {/* Area klik & fokus */}
                   <rect
                     x={geo.box.x}
                     y={geo.box.y}
@@ -361,7 +407,6 @@ function BookTable() {
                     strokeDasharray="5 4"
                   />
 
-                  {/* Kursi */}
                   {geo.seats.map((s, i) => (
                     <rect
                       key={i}
@@ -375,7 +420,6 @@ function BookTable() {
                     />
                   ))}
 
-                  {/* Meja */}
                   {t.shape === "round" ? (
                     <circle
                       cx={t.x}
@@ -411,7 +455,6 @@ function BookTable() {
             })}
           </svg>
 
-          {/* Keterangan warna */}
           <div
             style={{
               display: "grid",
@@ -426,7 +469,7 @@ function BookTable() {
           >
             <Legend swatch={{ background: "#fff", border: `2px solid ${BLUE}` }} label="Tersedia" />
             <Legend swatch={{ background: BLUE, border: `2px solid ${BLUE}` }} label="Dipilih" />
-            <Legend swatch={{ background: BOOKED, border: "2px solid #B5B0AB" }} label="Sudah terisi" />
+            <Legend swatch={{ background: BOOKED, border: "2px solid #B5B0AB" }} label="Sudah dipesan" />
             <Legend
               swatch={{ background: "#fff", border: `2px solid ${BLUE}`, opacity: 0.35 }}
               label={`Kurang dari ${guests} kursi`}
@@ -434,7 +477,7 @@ function BookTable() {
           </div>
         </div>
 
-        {/* ===== 3. Ringkasan & tombol pesan ===== */}
+        {/* ===== 3. Data pemesan & tombol pesan ===== */}
         <div
           style={{
             order: 3,
@@ -444,32 +487,18 @@ function BookTable() {
             border: `1px solid ${LINE}`,
             borderRadius: 24,
             padding: cardPad,
-            ...(isMobile
-              ? { position: "sticky", bottom: 12, zIndex: 20, boxShadow: "0 8px 24px rgba(14, 42, 77, 0.18)" }
-              : {}),
           }}
         >
-          {isMobile ? (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: selected ? INK : "#8A97AB" }}>
-                {selected ? `Meja ${selected.id}, ${selected.cap} kursi` : "Belum ada meja dipilih"}
-              </div>
-              <div style={{ fontSize: 13, color: MUTED }}>
-                {dates[dateIdx].full}, {TIMES[timeIdx]}, {guests} tamu
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 4 }}>
-              <Row label="Tanggal" value={dates[dateIdx].full} />
-              <Row label="Jam" value={TIMES[timeIdx]} />
-              <Row label="Tamu" value={`${guests} orang`} />
-              <Row
-                label="Meja"
-                value={selected ? `Meja ${selected.id}, ${selected.cap} kursi` : "Belum dipilih"}
-                muted={!selected}
-              />
-            </div>
-          )}
+          <div style={{ marginBottom: 12 }}>
+            <Row label="Tanggal" value={dates[dateIdx].full} />
+            <Row label="Jam" value={TIMES[timeIdx]} />
+            <Row label="Tamu" value={`${guests} orang`} />
+            <Row
+              label="Meja"
+              value={selected ? `Meja ${selected.id}, ${selected.cap} kursi` : "Belum dipilih"}
+              muted={!selected}
+            />
+          </div>
 
           {confirmed ? (
             <div>
@@ -484,39 +513,64 @@ function BookTable() {
                 }}
                 role="status"
               >
-                <strong style={{ color: BLUE }}>Meja {selected.id} sudah dipesan.</strong>
+                <strong style={{ color: BLUE }}>Meja {confirmed.mejaId} sudah dipesan.</strong>
                 <br />
-                Kode pesanan: <strong>{bookingCode}</strong>
+                Kode booking: <strong>{confirmed.kode}</strong>
               </div>
               <button
                 type="button"
-                onClick={() => setConfirmed(false)}
+                onClick={bookingBaru}
                 style={{ ...chip(false), width: "100%", marginTop: 10, padding: "12px 0", fontSize: 15 }}
               >
-                Ubah pesanan
+                Pesan meja lain
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              disabled={!selected}
-              onClick={() => setConfirmed(true)}
-              style={{
-                width: "100%",
-                marginTop: isMobile ? 0 : 12,
-                padding: "14px 0",
-                border: "none",
-                borderRadius: 14,
-                fontSize: 16,
-                fontWeight: 700,
-                background: selected ? BLUE : "#C9D3E0",
-                color: "#fff",
-                cursor: selected ? "pointer" : "not-allowed",
-                transition: "background 0.15s",
-              }}
-            >
-              {selected ? "Pesan meja" : "Pilih meja dulu"}
-            </button>
+            <>
+              <input
+                style={input}
+                placeholder="Nama pemesan"
+                value={nama}
+                onChange={(e) => setNama(e.target.value)}
+              />
+              <input
+                style={input}
+                placeholder="Nomor HP"
+                inputMode="tel"
+                value={noHp}
+                onChange={(e) => setNoHp(e.target.value)}
+              />
+              {error && (
+                <p style={{ margin: "0 0 10px", color: "#C0392B", fontSize: 13 }} role="alert">
+                  {error}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={!canSubmit}
+                onClick={handleBook}
+                style={{
+                  width: "100%",
+                  padding: "14px 0",
+                  border: "none",
+                  borderRadius: 14,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  background: canSubmit ? BLUE : "#C9D3E0",
+                  color: "#fff",
+                  cursor: canSubmit ? "pointer" : "not-allowed",
+                  transition: "background 0.15s",
+                }}
+              >
+                {sending
+                  ? "Mengirim..."
+                  : !selected
+                  ? "Pilih meja dulu"
+                  : !nama.trim() || !noHp.trim()
+                  ? "Isi nama dan nomor HP"
+                  : "Pesan meja"}
+              </button>
+            </>
           )}
         </div>
       </div>
