@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { tables as layout } from "../data/tables";
 import FloorPlan from "./FloorPlan";
 import { API } from "../config";
+import { img } from "../data/data";
 
 const BLUE = "#0C5CB8";
 const NAVY = "#0B2A4A";
@@ -11,7 +12,7 @@ const SOFT = "#EEF2F8";
 
 const rp = (n) => "Rp" + n.toLocaleString("id-ID");
 
-// Blok warna pengganti gambar, satu warna per kategori
+// Blok warna pengganti gambar (dipakai kalau menu belum punya foto)
 const COLORS = {
   cocktail: "#8E6BBF",
   mocktail: "#5FA37F",
@@ -20,7 +21,7 @@ const COLORS = {
   coffee: "#8A5A3C",
   dessert: "#D98A9C",
 };
-const labelOf = (k) => k.charAt(0).toUpperCase() + k.slice(1);
+const labelOf = (k) => (k ? k.charAt(0).toUpperCase() + k.slice(1) : "Lainnya");
 
 const modes = [
   { key: "dine", label: "Makan di sini" },
@@ -129,7 +130,6 @@ const s = {
   },
   chipOn: { background: BLUE, borderColor: BLUE, color: "#fff" },
   row: { display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: `1px solid ${LINE}` },
-  thumb: { width: 64, height: 64, flexShrink: 0, borderRadius: 14 },
   rowInfo: { flex: 1, minWidth: 0 },
   rowName: { margin: 0, fontSize: 16, fontWeight: 800 },
   rowDesc: { margin: "2px 0 4px", fontSize: 13, color: MUTED },
@@ -288,6 +288,13 @@ function Info({ label, value }) {
   );
 }
 
+// Foto menu; kalau belum ada foto, tampilkan blok warna kategori
+function Thumb({ image, color, size = 64, radius = 14 }) {
+  const box = { width: size, height: size, flexShrink: 0, borderRadius: radius };
+  if (image) return <img src={image} alt="" style={{ ...box, objectFit: "cover" }} />;
+  return <div style={{ ...box, background: color }} />;
+}
+
 export default function EOrder({
   initialStep = "menu",
   cart,
@@ -325,6 +332,7 @@ export default function EOrder({
             category: labelOf(p.kategori),
             desc: `★ ${p.rating} · ${p.reviews} penilaian`,
             color: COLORS[p.kategori] ?? "#C9D6E8",
+            image: p.gambar ? img(p.gambar.split(".")[0]) : undefined,
           }))
         );
         setMenuError(false);
@@ -377,13 +385,17 @@ export default function EOrder({
     else if (q < current) removeFromCart(item.id);
   };
 
-  const lines = cart.map((i) => ({
-    id: i.cartId,
-    name: i.name,
-    price: i.price,
-    qty: i.qty,
-    color: menu.find((m) => m.id === i.cartId)?.color ?? "#C9D6E8",
-  }));
+  const lines = cart.map((i) => {
+    const m = menu.find((x) => x.id === i.cartId);
+    return {
+      id: i.cartId,
+      name: i.name,
+      price: i.price,
+      qty: i.qty,
+      color: m?.color ?? "#C9D6E8",
+      image: m?.image,
+    };
+  });
   const count = lines.reduce((a, l) => a + l.qty, 0);
   const total = lines.reduce((a, l) => a + l.qty * l.price, 0);
   const needTable = mode === "dine" && table === null;
@@ -494,7 +506,7 @@ export default function EOrder({
                 const qty = qtyOf(m.id);
                 return (
                   <div key={m.id} style={s.row}>
-                    <div style={{ ...s.thumb, background: m.color }} />
+                    <Thumb image={m.image} color={m.color} />
                     <div style={s.rowInfo}>
                       <h3 style={s.rowName}>{m.name}</h3>
                       <p style={s.rowDesc}>{m.desc}</p>
@@ -558,7 +570,7 @@ export default function EOrder({
                   <div style={{ paddingTop: 8 }}>
                     {lines.map((l) => (
                       <div key={l.id} style={{ ...s.row, borderBottom: "none", padding: "10px 0" }}>
-                        <div style={{ ...s.thumb, width: 48, height: 48, borderRadius: 12, background: l.color }} />
+                        <Thumb image={l.image} color={l.color} size={48} radius={12} />
                         <div style={s.rowInfo}>
                           <h3 style={s.rowName}>{l.name}</h3>
                           <p style={s.rowPrice}>{rp(l.price)}</p>
