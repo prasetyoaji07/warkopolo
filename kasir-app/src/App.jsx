@@ -1,6 +1,7 @@
 import { useState } from "react";
 import MenuList from "./components/MenuList";
 import OrderList from "./components/OrderList";
+import BookingList from "./components/BookingList";
 
 function App() {
   const [tab, setTab] = useState("pesanan");
@@ -17,6 +18,12 @@ function App() {
           Pesanan
         </button>{" "}
         <button
+          onClick={() => setTab("booking")}
+          style={{ fontWeight: tab === "booking" ? "bold" : "normal" }}
+        >
+          Booking
+        </button>{" "}
+        <button
           onClick={() => setTab("menu")}
           style={{ fontWeight: tab === "menu" ? "bold" : "normal" }}
         >
@@ -25,6 +32,7 @@ function App() {
       </div>
 
       {tab === "pesanan" && <OrderList />}
+      {tab === "booking" && <BookingList />}
       {tab === "menu" && <MenuList />}
     </div>
   );

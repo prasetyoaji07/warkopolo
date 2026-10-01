@@ -11,4 +11,10 @@ const pool = mysql.createPool({
   ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
 });
 
+// Setiap koneksi baru di pool diberi tahu memakai WIB (+07:00),
+// supaya CURRENT_TIMESTAMP dan pembacaan kolom TIMESTAMP konsisten WIB.
+pool.on("connection", (conn) => {
+  conn.query("SET time_zone = '+07:00';");
+});
+
 module.exports = pool;
