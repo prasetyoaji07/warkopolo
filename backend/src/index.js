@@ -7,6 +7,7 @@ const ordersRouter = require("./routes/orders");
 const tablesRouter = require("./routes/tables");
 const bookingsRouter = require("./routes/bookings");
 const jalankanAutoExpireBooking = require("./autoExpireBooking");
+const jalankanAutoCompleteOrder = require("./autoCompleteOrder");
 
 const app = express();
 app.use(cors());
@@ -29,4 +30,6 @@ app.listen(PORT, () => {
   // Cek booking no-show setiap 1 menit, plus sekali langsung saat server start.
   jalankanAutoExpireBooking();
   setInterval(jalankanAutoExpireBooking, 60 * 1000);
+  jalankanAutoCompleteOrder();
+  setInterval(jalankanAutoCompleteOrder, 60 * 1000);
 });

@@ -145,10 +145,10 @@ router.patch("/:id", async (req, res) => {
       throw err;
     }
 
-    await conn.query("UPDATE orders SET status = ? WHERE id = ?", [
-      status,
-      req.params.id,
-    ]);
+        await conn.query(
+      "UPDATE orders SET status = ?, disajikan_at = IF(? = 'disajikan', NOW(), disajikan_at) WHERE id = ?",
+      [status, status, req.params.id]
+    );
 
     // Meja hanya dikosongkan saat order selesai
     if (status === "selesai") {

@@ -6,6 +6,29 @@ const router = express.Router();
 // Satu booking menahan meja selama 2 jam (7200 detik)
 const DURASI_DETIK = 7200;
 
+// Meja terisi (walk-in atau tamu booking) dianggap terpakai 1 jam sejak tamu duduk.
+// Mengembalikan id meja yang masih terpakai pada slot (tanggal, jam).
+// Kalau mejaId diisi, hanya meja itu yang dicek.
+async function mejaTerpakaiWalkIn(conn, tanggal, jam, mejaId = null) {
+  const params = [tanggal, jam];
+  let filterMeja = "";
+  if (mejaId !== null) {
+    filterMeja = "AND t.id = ?";
+    params.push(mejaId);
+  }
+  const [rows] = await conn.query(
+    `SELECT DISTINCT t.id
+     FROM \`tables\` t
+     LEFT JOIN orders o ON o.meja_id = t.id AND o.status <> 'selesai'
+     WHERE t.status = 'terisi'
+       ${filterMeja}
+       AND TIMESTAMP(?, ?) < DATE_ADD(COALESCE(t.terisi_sejak, o.created_at, NOW()), INTERVAL 1 HOUR)`,
+    // urutan ? : tanggal, jam, (mejaId)
+    mejaId !== null ? [tanggal, jam, mejaId] : [tanggal, jam]
+  );
+  return rows.map((r) => r.id);
+}
+
 // POST /bookings -> buat booking baru
 // Body: { meja_id, nama, no_hp, jumlah_orang, tanggal: "YYYY-MM-DD", jam: "HH:MM" }
 router.post("/", async (req, res) => {
@@ -27,10 +50,18 @@ router.post("/", async (req, res) => {
     await conn.beginTransaction();
 
     // Kunci baris meja supaya dua booking bersamaan tidak lolos keduanya
-    const [meja] = await conn.query("SELECT id FROM tables WHERE id = ? FOR UPDATE", [meja_id]);
+    const [meja] = await conn.query("SELECT id, status FROM tables WHERE id = ? FOR UPDATE", [meja_id]);
     if (meja.length === 0) {
       const err = new Error("Meja tidak ditemukan");
       err.status = 400;
+      throw err;
+    }
+
+    // Meja yang sedang dipakai tamu (walk-in/booking datang) masih terpakai pada slot ini?
+    const terpakai = await mejaTerpakaiWalkIn(conn, tanggal, jam, meja_id);
+    if (terpakai.length > 0) {
+      const err = new Error("Meja sedang dipakai saat ini, tidak bisa dibooking untuk jam tersebut");
+      err.status = 409;
       throw err;
     }
 
@@ -62,7 +93,7 @@ router.post("/", async (req, res) => {
 });
 
 // GET /bookings/ketersediaan?tanggal=YYYY-MM-DD&jam=HH:MM
-// -> daftar id meja yang sudah dipesan pada waktu itu (untuk customer app)
+// -> daftar id meja yang sudah dipesan/terisi pada waktu itu (untuk customer app)
 router.get("/ketersediaan", async (req, res) => {
   const { tanggal, jam } = req.query;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal || "") || !/^\d{2}:\d{2}$/.test(jam || "")) {
@@ -75,7 +106,13 @@ router.get("/ketersediaan", async (req, res) => {
          AND ABS(TIME_TO_SEC(jam) - TIME_TO_SEC(?)) < ?`,
       [tanggal, jam, DURASI_DETIK]
     );
-    res.json(rows.map((r) => r.meja_id));
+    const terpesan = new Set(rows.map((r) => r.meja_id));
+
+    // Tambahkan meja yang masih dipakai tamu pada slot ini
+    const terpakai = await mejaTerpakaiWalkIn(db, tanggal, jam);
+    terpakai.forEach((id) => terpesan.add(id));
+
+    res.json([...terpesan]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
