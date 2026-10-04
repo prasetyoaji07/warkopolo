@@ -55,6 +55,13 @@ const styles = {
     fontWeight: 700,
   },
 
+  statusLink: {
+    color: ACCENT,
+    textDecoration: "none",
+    fontSize: 15,
+    fontWeight: 700,
+  },
+
   actions: {
     display: "flex",
     justifyContent: "flex-end",
@@ -145,7 +152,7 @@ function CloseIcon() {
   );
 }
 
-function Navbar({ cartCount = 0, onOpenMenu, onOpenCart }) {
+function Navbar({ cartCount = 0, statusOrderId = null, onOpenMenu, onOpenCart }) {
   const [open, setOpen] = useState(false);
 
   const handleEOrder = (e) => {
@@ -188,6 +195,17 @@ function Navbar({ cartCount = 0, onOpenMenu, onOpenCart }) {
                 {l.label}
               </a>
             )
+          )}
+
+          {/* Status pesanan: hanya muncul kalau ada pesanan yang belum selesai */}
+          {statusOrderId && (
+            <Link
+              to={`/status/${statusOrderId}`}
+              style={styles.statusLink}
+              onClick={() => setOpen(false)}
+            >
+              Status pesanan
+            </Link>
           )}
         </nav>
 

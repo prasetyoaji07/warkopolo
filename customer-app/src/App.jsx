@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, Outlet, useOutletContext } from "react-router-dom";
+import { Routes, Route, Outlet, useOutletContext, useNavigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Categories from "./components/Categories";
@@ -11,8 +11,20 @@ import { img } from "./data/data";
 import { API } from "./config";
 import Menu from "./pages/Menu";
 import BookTable from "./pages/BookTable";
+import StatusPesanan from "./pages/StatusPesanan";
 
 const DESIGN_WIDTH = 900;
+
+// Nomor pesanan terakhir disimpan di browser supaya status bisa dibuka lagi
+const LAST_ORDER_KEY = "warkopolo:lastOrderId";
+
+function readLastOrder() {
+  try {
+    return localStorage.getItem(LAST_ORDER_KEY) || null;
+  } catch {
+    return null;
+  }
+}
 
 // Judul bagian di halaman Home
 function SectionTitle({ children }) {
@@ -24,7 +36,7 @@ function SectionTitle({ children }) {
 }
 
 // Isi halaman Home
-function Home({ onAddToCart }) {
+function Home({ onAddToCart, onRemoveFromCart, cart }) {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
@@ -64,7 +76,9 @@ function Home({ onAddToCart }) {
           <ProductCard
             key={p.id}
             {...p}
+            qty={cart.find((i) => i.cartId === p.id)?.qty ?? 0}
             onAddToCart={() => onAddToCart({ ...p, cartId: p.id })}
+            onRemove={() => onRemoveFromCart(p.id)}
           />
         ))}
       </section>
@@ -73,8 +87,14 @@ function Home({ onAddToCart }) {
 }
 
 function HomePage() {
-  const { addToCart } = useOutletContext();
-  return <Home onAddToCart={addToCart} />;
+  const { addToCart, removeFromCart, cart } = useOutletContext();
+  return (
+    <Home
+      onAddToCart={addToCart}
+      onRemoveFromCart={removeFromCart}
+      cart={cart}
+    />
+  );
 }
 
 // Layout untuk Home: desain 900px diperkecil sesuai lebar layar
@@ -96,6 +116,7 @@ function ZoomLayout({ shop }) {
     <>
       <Navbar
         cartCount={shop.cartCount}
+        statusOrderId={shop.lastOrderId}
         onOpenMenu={() => shop.openPanel("menu")}
         onOpenCart={() => shop.openPanel("cart")}
       />
@@ -117,6 +138,7 @@ function PlainLayout({ shop }) {
     <>
       <Navbar
         cartCount={shop.cartCount}
+        statusOrderId={shop.lastOrderId}
         onOpenMenu={() => shop.openPanel("menu")}
         onOpenCart={() => shop.openPanel("cart")}
       />
@@ -127,10 +149,32 @@ function PlainLayout({ shop }) {
 }
 
 function App() {
+  const navigate = useNavigate();
+
   // Keranjang disimpan di sini supaya tidak reset saat pindah halaman
   const [cart, setCart] = useState([]);
   // Panel e-Order: null (tertutup) | "menu" | "cart"
   const [panel, setPanel] = useState(null);
+  // Nomor pesanan terakhir (untuk tombol status di navbar)
+  const [lastOrderId, setLastOrderId] = useState(readLastOrder);
+
+  const saveLastOrder = (id) => {
+    try {
+      localStorage.setItem(LAST_ORDER_KEY, String(id));
+    } catch {
+      // penyimpanan browser tidak tersedia, abaikan
+    }
+    setLastOrderId(String(id));
+  };
+
+  const clearLastOrder = () => {
+    try {
+      localStorage.removeItem(LAST_ORDER_KEY);
+    } catch {
+      // abaikan
+    }
+    setLastOrderId(null);
+  };
 
   const addToCart = (item) => {
     setCart((prev) => {
@@ -163,6 +207,8 @@ function App() {
     addToCart,
     removeFromCart,
     openPanel: setPanel,
+    lastOrderId,
+    clearLastOrder,
   };
 
   return (
@@ -174,6 +220,7 @@ function App() {
         <Route element={<PlainLayout shop={shop} />}>
           <Route path="/menu/:kategori" element={<Menu />} />
           <Route path="/book-table" element={<BookTable />} />
+          <Route path="/status/:id" element={<StatusPesanan />} />
         </Route>
       </Routes>
 
@@ -185,6 +232,11 @@ function App() {
           removeFromCart={removeFromCart}
           clearCart={() => setCart([])}
           onClose={() => setPanel(null)}
+          onOrderPlaced={saveLastOrder}
+          onViewStatus={(id) => {
+            setPanel(null);
+            navigate(`/status/${id}`);
+          }}
         />
       )}
     </>

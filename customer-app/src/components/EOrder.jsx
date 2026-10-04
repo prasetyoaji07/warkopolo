@@ -288,6 +288,42 @@ function Info({ label, value }) {
   );
 }
 
+// Gambar QR palsu untuk simulasi (pola tetap, bukan QR sungguhan)
+function QrFake({ size = 200 }) {
+  const n = 25;
+  let seed = 7;
+  const rnd = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const inFinder = (x, y) =>
+    (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
+  const cells = [];
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      if (!inFinder(x, y) && rnd() > 0.5) {
+        cells.push(<rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" />);
+      }
+    }
+  }
+  const finder = (x, y) => (
+    <g key={`f${x}-${y}`}>
+      <rect x={x} y={y} width="7" height="7" />
+      <rect x={x + 1} y={y + 1} width="5" height="5" fill="#fff" />
+      <rect x={x + 2} y={y + 2} width="3" height="3" />
+    </g>
+  );
+  return (
+    <svg width={size} height={size} viewBox={`-1 -1 ${n + 2} ${n + 2}`} fill="#0B2A4A" aria-hidden="true">
+      <rect x="-1" y="-1" width={n + 2} height={n + 2} fill="#fff" />
+      {cells}
+      {finder(0, 0)}
+      {finder(n - 7, 0)}
+      {finder(0, n - 7)}
+    </svg>
+  );
+}
+
 // Foto menu; kalau belum ada foto, tampilkan blok warna kategori
 function Thumb({ image, color, size = 64, radius = 14 }) {
   const box = { width: size, height: size, flexShrink: 0, borderRadius: radius };
@@ -302,6 +338,8 @@ export default function EOrder({
   removeFromCart,
   clearCart,
   onClose,
+  onOrderPlaced,
+  onViewStatus,
 }) {
   const desktop = useIsDesktop();
   const [step, setStep] = useState(initialStep);
@@ -313,6 +351,7 @@ export default function EOrder({
   const [order, setOrder] = useState(null);
   const [sending, setSending] = useState(false);
   const [payError, setPayError] = useState("");
+  const [paid, setPaid] = useState(false);
 
   // Menu diambil dari backend (menggantikan data statis orderMenu.js)
   const [menu, setMenu] = useState([]);
@@ -407,7 +446,8 @@ export default function EOrder({
       m.name.toLowerCase().includes(query.toLowerCase())
   );
 
-  const handlePay = async () => {
+  // Kirim pesanan ke backend
+  const submitOrder = async () => {
     if (sending) return;
     setSending(true);
     setPayError("");
@@ -426,20 +466,44 @@ export default function EOrder({
 
       const t = floor.find((x) => x.id === table);
       setOrder({
+        id: data.id,
         code: "ORD-" + data.id,
         place: `Meja ${t.id}, ${t.seats} kursi`,
         names: lines.map((l) => l.name).join(", "),
         total,
       });
+      // Simpan nomor pesanan supaya statusnya bisa dibuka lagi kapan saja
+      if (onOrderPlaced) onOrderPlaced(data.id);
       clearCart();
       setStep("done");
     } catch (err) {
       console.error("Gagal mengirim pesanan:", err);
       setPayError(err.message);
+      setStep("cart");
     } finally {
       setSending(false);
     }
   };
+
+  // Tombol Bayar: QRIS/OVO tampilkan layar simulasi dulu, "Di kasir" langsung kirim
+  const handlePay = () => {
+    if (sending) return;
+    if (pay === "Di kasir") submitOrder();
+    else setStep("qris");
+  };
+
+  // Simulasi: 5 detik "menunggu bayar", lalu "berhasil", lalu pesanan dikirim
+  useEffect(() => {
+    if (step !== "qris") return;
+    setPaid(false);
+    const t1 = setTimeout(() => setPaid(true), 5000);
+    const t2 = setTimeout(() => submitOrder(), 6500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   return (
     <div style={s.overlay} onClick={onClose}>
@@ -641,6 +705,59 @@ export default function EOrder({
           </>
         )}
 
+        {/* ---------- LANGKAH QRIS: SIMULASI PEMBAYARAN ---------- */}
+        {step === "qris" && (
+          <>
+            <div style={s.headBlue}>
+              <span style={{ width: 40 }} />
+              <h2 style={s.titleBlue}>Pembayaran {pay}</h2>
+              <span style={{ width: 40 }} />
+            </div>
+
+            <div style={s.body}>
+              <div style={{ textAlign: "center", paddingTop: 28 }}>
+                {paid ? (
+                  <>
+                    <div style={s.doneRing}>
+                      <div style={s.doneDot}>✓</div>
+                    </div>
+                    <h2 style={{ margin: "16px 0 4px", fontSize: 24, fontWeight: 800 }}>Pembayaran berhasil</h2>
+                    <p style={{ margin: 0, color: MUTED }}>Mengirim pesanan ke dapur...</p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: "0 0 4px", color: MUTED }}>Total pembayaran</p>
+                    <h2 style={{ margin: "0 0 18px", fontSize: 28, fontWeight: 800 }}>{rp(total)}</h2>
+                    <div
+                      style={{
+                        display: "inline-block",
+                        padding: 12,
+                        border: `1px solid ${LINE}`,
+                        borderRadius: 18,
+                      }}
+                    >
+                      <QrFake size={200} />
+                    </div>
+                    <p style={{ margin: "18px 0 4px", fontWeight: 700 }}>Scan dengan aplikasi e-wallet</p>
+                    <p style={{ margin: 0, color: MUTED }}>Menunggu pembayaran...</p>
+                  </>
+                )}
+                <p style={{ margin: "22px 0 0", fontSize: 12, color: MUTED }}>
+                  Simulasi pembayaran (demo), tidak ada uang yang diproses.
+                </p>
+              </div>
+            </div>
+
+            {!paid && (
+              <div style={s.footer}>
+                <button type="button" style={s.secondary} onClick={() => setStep("cart")}>
+                  Batalkan
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
         {/* ---------- LANGKAH 3: PESANAN DITERIMA ---------- */}
         {step === "done" && order && (
           <>
@@ -671,7 +788,11 @@ export default function EOrder({
             </div>
 
             <div style={s.footer}>
-              <button type="button" style={{ ...s.primary, justifyContent: "center" }} onClick={onClose}>
+              <button
+                type="button"
+                style={{ ...s.primary, justifyContent: "center" }}
+                onClick={() => (onViewStatus ? onViewStatus(order.id) : onClose())}
+              >
                 Lihat status pesanan
               </button>
               <button type="button" style={s.secondary} onClick={() => setStep("menu")}>

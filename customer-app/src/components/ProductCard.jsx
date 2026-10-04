@@ -65,8 +65,10 @@ const styles = {
   price: { margin: "2px 0 0", fontSize: 15, color: "#777" },
   button: {
     width: "100%",
+    height: 40,
+    boxSizing: "border-box",
     marginTop: 12,
-    padding: "10px 0",
+    padding: 0,
     border: "none",
     borderRadius: 12,
     background: PURPLE,
@@ -75,6 +77,42 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  stepper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    height: 40,
+    boxSizing: "border-box",
+    marginTop: 12,
+  },
+  stepMinus: {
+    width: 40,
+    height: 40,
+    border: `2px solid ${PURPLE}`,
+    borderRadius: 12,
+    background: "#fff",
+    color: PURPLE,
+    fontSize: 20,
+    fontWeight: 700,
+    lineHeight: 1,
+    cursor: "pointer",
+    padding: 0,
+  },
+  stepPlus: {
+    width: 40,
+    height: 40,
+    border: "none",
+    borderRadius: 12,
+    background: PURPLE,
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: 700,
+    lineHeight: 1,
+    cursor: "pointer",
+    padding: 0,
+  },
+  stepQty: { fontSize: 16, fontWeight: 700, color: PURPLE },
 };
 
 function HeartIcon({ filled }) {
@@ -101,7 +139,9 @@ export default function ProductCard({
   rating = 5,
   reviews = 0,
   image,
+  qty = 0,
   onAddToCart,
+  onRemove,
 }) {
   const [liked, setLiked] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -150,9 +190,31 @@ export default function ProductCard({
         <h3 style={styles.name}>{name}</h3>
         <p style={styles.price}>Rp.{price.toLocaleString("id-ID")}</p>
 
-        <button type="button" style={styles.button} onClick={onAddToCart}>
-          Add to cart
-        </button>
+        {qty > 0 && onRemove ? (
+          <div style={styles.stepper}>
+            <button
+              type="button"
+              aria-label={`Kurangi ${name}`}
+              style={styles.stepMinus}
+              onClick={onRemove}
+            >
+              −
+            </button>
+            <span style={styles.stepQty}>{qty}</span>
+            <button
+              type="button"
+              aria-label={`Tambah ${name}`}
+              style={styles.stepPlus}
+              onClick={onAddToCart}
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <button type="button" style={styles.button} onClick={onAddToCart}>
+            Add to cart
+          </button>
+        )}
       </div>
     </article>
   );
