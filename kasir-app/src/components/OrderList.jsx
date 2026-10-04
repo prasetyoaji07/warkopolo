@@ -33,42 +33,20 @@ function OrderList() {
     return items.reduce((sum, it) => sum + Number(it.harga) * it.qty, 0);
   }
 
-async function ubahStatus(id, status) {
-  try {
-    const res = await fetch(`${API}/orders/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || `Server membalas ${res.status}`);
-    }
-    loadOrders();
-  } catch (err) {
-    setError("Gagal mengubah status: " + err.message);
-  }
-}
-
-  async function selesaikan(order) {
+  async function ubahStatus(id, status) {
     try {
-      const res1 = await fetch(`${API}/orders/${order.id}`, {
+      const res = await fetch(`${API}/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "selesai" }),
+        body: JSON.stringify({ status }),
       });
-      if (!res1.ok) throw new Error(`Order: server membalas ${res1.status}`);
-
-      const res2 = await fetch(`${API}/tables/${order.meja_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "kosong" }),
-      });
-      if (!res2.ok) throw new Error(`Meja: server membalas ${res2.status}`);
-
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server membalas ${res.status}`);
+      }
       loadOrders();
     } catch (err) {
-      setError("Gagal menyelesaikan: " + err.message);
+      setError("Gagal mengubah status: " + err.message);
     }
   }
 
@@ -119,7 +97,7 @@ async function ubahStatus(id, status) {
 
           {o.status === "disajikan" && (
             <div style={{ marginTop: 8 }}>
-                 <button onClick={() => ubahStatus(o.id, "selesai")}>Pelanggan Selesai</button>
+              <button onClick={() => ubahStatus(o.id, "selesai")}>Pelanggan Selesai</button>
             </div>
           )}
         </div>
