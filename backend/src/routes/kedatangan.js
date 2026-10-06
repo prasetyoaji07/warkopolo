@@ -138,8 +138,9 @@ router.post("/kedatangan/meja/:mejaId/selesai", async (req, res) => {
 
 // Otomatis kosongkan meja yang sudah lewat batas waktu
 async function autoSelesaiMeja() {
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await pool.getConnection();
     const [rows] = await conn.query(
       "SELECT id FROM `tables` WHERE status = 'terisi' AND terisi_sejak IS NOT NULL " +
         "AND terisi_sejak < (NOW() - INTERVAL ? MINUTE)",
@@ -152,10 +153,10 @@ async function autoSelesaiMeja() {
       console.log(`[auto-selesai] Meja ${r.id} dikosongkan (lewat ${DURASI_MAKS_MENIT} menit)`);
     }
   } catch (err) {
-    await conn.rollback().catch(() => {});
+    if (conn) await conn.rollback().catch(() => {});
     console.error("[auto-selesai] gagal:", err.message);
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 }
 
