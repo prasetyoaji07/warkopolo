@@ -13,6 +13,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Pengaman: kalau tidak ada body JSON, anggap objek kosong (bukan crash)
+app.use((req, res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
+
 app.get("/", (req, res) => {
   res.send("Server Warkopolo jalan!");
 });

@@ -3,6 +3,8 @@ import { tables as layout } from "../data/tables";
 import FloorPlan from "./FloorPlan";
 import { API } from "../config";
 import { img } from "../data/data";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import L from "leaflet";
 
 const BLUE = "#0C5CB8";
 const NAVY = "#0B2A4A";
@@ -29,6 +31,25 @@ const modes = [
   { key: "delivery", label: "Antar" },
 ];
 const payments = ["QRIS", "OVO", "Di kasir"];
+const MAP_CENTER = [-6.200000, 106.816666];
+
+const customerIcon = L.divIcon({
+  className: "warkopolo-customer-marker",
+  html: `<div style="font-size:30px;line-height:30px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));">📍</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 30],
+});
+
+function LocationPicker({ position, onPick }) {
+  useMapEvents({
+    click(e) {
+      onPick([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+
+  return position ? <Marker position={position} icon={customerIcon} /> : null;
+}
+
 
 const keyframes = `
 @keyframes eo-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -206,6 +227,19 @@ const s = {
     cursor: "pointer",
   },
   segOn: { background: "#fff", color: BLUE, boxShadow: "0 1px 4px rgba(11,42,74,0.12)" },
+  label: { display: "block", margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: MUTED },
+  field: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 14px",
+    marginBottom: 12,
+    border: `1px solid ${LINE}`,
+    borderRadius: 12,
+    fontSize: 15,
+    outline: "none",
+    color: NAVY,
+    fontFamily: "inherit",
+  },
   payRow: { display: "flex", gap: 10 },
   pay: {
     flex: 1,
@@ -352,6 +386,14 @@ export default function EOrder({
   const [sending, setSending] = useState(false);
   const [payError, setPayError] = useState("");
   const [paid, setPaid] = useState(false);
+  const [qrLeft, setQrLeft] = useState(7);
+  const [doneLeft, setDoneLeft] = useState(3);
+
+  // Data pemesan (untuk Ambil dan Antar)
+  const [nama, setNama] = useState("");
+  const [noHp, setNoHp] = useState("");
+  const [alamat, setAlamat] = useState("");
+  const [deliveryLocation, setDeliveryLocation] = useState(null);
 
   // Menu diambil dari backend (menggantikan data statis orderMenu.js)
   const [menu, setMenu] = useState([]);
@@ -437,8 +479,20 @@ export default function EOrder({
   });
   const count = lines.reduce((a, l) => a + l.qty, 0);
   const total = lines.reduce((a, l) => a + l.qty * l.price, 0);
+
+  // Validasi form pemesan: nama minimal 2 huruf, nomor HP 9-15 angka
+  const hpDigits = noHp.replace(/\D/g, "");
+  const formOk = nama.trim().length >= 2 && hpDigits.length >= 9 && hpDigits.length <= 15;
+
   const needTable = mode === "dine" && table === null;
-  const canPay = lines.length > 0 && mode === "dine" && !needTable && !sending;
+  const alamatOk = alamat.trim().length >= 5;
+  const locationOk = deliveryLocation !== null;
+  const canPay =
+    lines.length > 0 &&
+    !sending &&
+    ((mode === "dine" && table !== null) ||
+      (mode === "pickup" && formOk) ||
+      (mode === "delivery" && formOk && alamatOk && locationOk));
 
   const shown = menu.filter(
     (m) =>
@@ -453,22 +507,49 @@ export default function EOrder({
     setPayError("");
 
     try {
+      const body = {
+        items: lines.map((l) => ({ product_id: l.id, qty: l.qty })),
+      };
+      if (mode === "dine") {
+        body.tipe_pesanan = "dine";
+        body.meja_id = table;
+      } else if (mode === "pickup") {
+        body.tipe_pesanan = "pickup";
+        body.nama_pelanggan = nama.trim();
+        body.no_hp = hpDigits;
+      } else if (mode === "delivery") {
+        body.tipe_pesanan = "delivery";
+        body.nama_pelanggan = nama.trim();
+        body.no_hp = hpDigits;
+        body.alamat = alamat.trim();
+        body.lat = deliveryLocation[0];
+        body.lng = deliveryLocation[1];
+      }
+
       const res = await fetch(`${API}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meja_id: table,
-          items: lines.map((l) => ({ product_id: l.id, qty: l.qty })),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Server membalas ${res.status}`);
 
-      const t = floor.find((x) => x.id === table);
+      let place;
+      if (mode === "pickup") {
+        const antrean = data.nomor_antrean ? ` ${data.nomor_antrean}` : "";
+        place = `Ambil${antrean} - ${nama.trim()}`;
+      } else if (mode === "delivery") {
+        place = `Antar - ${nama.trim()}`;
+      } else {
+        const t = floor.find((x) => x.id === table);
+        place = `Meja ${t.id}, ${t.seats} kursi`;
+      }
+
       setOrder({
         id: data.id,
+        mode,
         code: "ORD-" + data.id,
-        place: `Meja ${t.id}, ${t.seats} kursi`,
+        place,
         names: lines.map((l) => l.name).join(", "),
         total,
       });
@@ -492,16 +573,33 @@ export default function EOrder({
     else setStep("qris");
   };
 
-  // Simulasi: 5 detik "menunggu bayar", lalu "berhasil", lalu pesanan dikirim
+  // Simulasi: 7 detik "menunggu bayar", lalu "berhasil" 3 detik, lalu pesanan dikirim
   useEffect(() => {
     if (step !== "qris") return;
     setPaid(false);
-    const t1 = setTimeout(() => setPaid(true), 5000);
-    const t2 = setTimeout(() => submitOrder(), 6500);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    setQrLeft(7);
+    setDoneLeft(3);
+    let qr = 7;
+    let done = 3;
+    let berhasil = false;
+    const timer = setInterval(() => {
+      if (!berhasil) {
+        qr -= 1;
+        setQrLeft(qr);
+        if (qr <= 0) {
+          berhasil = true;
+          setPaid(true);
+        }
+      } else {
+        done -= 1;
+        setDoneLeft(done);
+        if (done <= 0) {
+          clearInterval(timer);
+          submitOrder();
+        }
+      }
+    }, 1000);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -651,7 +749,11 @@ export default function EOrder({
                         key={m.key}
                         type="button"
                         style={{ ...s.seg, ...(mode === m.key ? s.segOn : null) }}
-                        onClick={() => setMode(m.key)}
+                        onClick={() => {
+                          setMode(m.key);
+                          setPayError("");
+                          if (m.key !== "dine" && pay === "Di kasir") setPay("QRIS");
+                        }}
                       >
                         {m.label}
                       </button>
@@ -665,18 +767,113 @@ export default function EOrder({
                     </>
                   )}
 
+                  {(mode === "pickup" || mode === "delivery") && (
+                    <>
+                      <h3 style={s.section}>Data pemesan</h3>
+
+                      <label style={s.label} htmlFor="eo-nama">
+                        Nama
+                      </label>
+                      <input
+                        id="eo-nama"
+                        style={s.field}
+                        placeholder="Nama kamu"
+                        value={nama}
+                        onChange={(e) => setNama(e.target.value)}
+                      />
+
+                      <label style={s.label} htmlFor="eo-hp">
+                        Nomor HP
+                      </label>
+                      <input
+                        id="eo-hp"
+                        style={s.field}
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="08xxxxxxxxxx"
+                        value={noHp}
+                        onChange={(e) => setNoHp(e.target.value)}
+                      />
+
+                      {mode === "delivery" && (
+                        <>
+                          <label style={s.label} htmlFor="eo-alamat">
+                            Alamat pengantaran
+                          </label>
+                          <textarea
+                            id="eo-alamat"
+                            style={{ ...s.field, minHeight: 80, resize: "vertical" }}
+                            placeholder="Jalan, nomor rumah, patokan"
+                            value={alamat}
+                            onChange={(e) => setAlamat(e.target.value)}
+                          />
+
+                          <label style={s.label}>Lokasi pengantaran</label>
+
+                          <div
+                            style={{
+                              height: 260,
+                              borderRadius: 16,
+                              overflow: "hidden",
+                              border: `1px solid ${LINE}`,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <MapContainer
+                              center={deliveryLocation || MAP_CENTER}
+                              zoom={13}
+                              scrollWheelZoom={false}
+                              style={{ width: "100%", height: "100%" }}
+                            >
+                              <TileLayer
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                              />
+                              <LocationPicker
+                                position={deliveryLocation}
+                                onPick={setDeliveryLocation}
+                              />
+                            </MapContainer>
+                          </div>
+
+                          <p style={{ ...s.hint, marginBottom: 4 }}>
+                            {deliveryLocation
+                              ? "✓ Lokasi pengantaran sudah dipilih. Klik peta lagi untuk mengubah."
+                              : "Klik pada peta untuk menentukan lokasi pengantaran."}
+                          </p>
+
+                          {deliveryLocation && (
+                            <p
+                              style={{
+                                margin: "0 0 8px",
+                                fontSize: 12,
+                                color: MUTED,
+                                textAlign: "center",
+                              }}
+                            >
+                              Lat: {deliveryLocation[0].toFixed(6)} · Lng:{" "}
+                              {deliveryLocation[1].toFixed(6)}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
                   <h3 style={s.section}>Cara bayar</h3>
                   <div style={s.payRow}>
-                    {payments.map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        style={{ ...s.pay, ...(pay === p ? s.payOn : null) }}
-                        onClick={() => setPay(p)}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                    {payments
+                      .filter((p) => mode === "dine" || p !== "Di kasir")
+                      .map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          style={{ ...s.pay, ...(pay === p ? s.payOn : null) }}
+                          onClick={() => setPay(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
                   </div>
                 </>
               )}
@@ -684,8 +881,17 @@ export default function EOrder({
 
             {lines.length > 0 && (
               <div style={s.footer}>
-                {mode !== "dine" && <p style={s.hint}>Untuk saat ini pesan di tempat saja</p>}
-                {needTable && mode === "dine" && <p style={s.hint}>Pilih meja di denah dulu</p>}
+                {needTable && <p style={s.hint}>Pilih meja di denah dulu</p>}
+                {mode === "pickup" && !formOk && <p style={s.hint}>Isi nama dan nomor HP dulu</p>}
+                {mode === "delivery" && !(formOk && alamatOk && locationOk) && (
+                  <p style={s.hint}>
+                    {!formOk
+                      ? "Isi nama dan nomor HP dulu"
+                      : !alamatOk
+                      ? "Isi alamat pengantaran dulu"
+                      : "Pilih lokasi pengantaran di peta dulu"}
+                  </p>
+                )}
                 {payError && <p style={{ ...s.hint, color: "#C0392B" }}>{payError}</p>}
                 <button
                   type="button"
@@ -716,32 +922,43 @@ export default function EOrder({
 
             <div style={s.body}>
               <div style={{ textAlign: "center", paddingTop: 28 }}>
+                <p style={{ margin: "0 0 4px", color: MUTED }}>Total pembayaran</p>
+                <h2 style={{ margin: "0 0 18px", fontSize: 28, fontWeight: 800 }}>{rp(total)}</h2>
+                <div
+                  style={{
+                    display: "inline-block",
+                    padding: 12,
+                    border: `1px solid ${LINE}`,
+                    borderRadius: 18,
+                  }}
+                >
+                  <QrFake size={200} />
+                </div>
+
                 {paid ? (
-                  <>
-                    <div style={s.doneRing}>
-                      <div style={s.doneDot}>✓</div>
-                    </div>
-                    <h2 style={{ margin: "16px 0 4px", fontSize: 24, fontWeight: 800 }}>Pembayaran berhasil</h2>
-                    <p style={{ margin: 0, color: MUTED }}>Mengirim pesanan ke dapur...</p>
-                  </>
+                  <div
+                    style={{
+                      margin: "18px 0 0",
+                      padding: 14,
+                      borderRadius: 14,
+                      background: "#E6F5EC",
+                      color: "#1E7A46",
+                    }}
+                  >
+                    <strong style={{ fontSize: 16 }}>✓ Pembayaran berhasil</strong>
+                    <p style={{ margin: "6px 0 0", fontSize: 14 }}>
+                      Akan pindah ke halaman pesanan dalam {doneLeft} detik.
+                      <br />
+                      Jangan tutup halaman ini.
+                    </p>
+                  </div>
                 ) : (
                   <>
-                    <p style={{ margin: "0 0 4px", color: MUTED }}>Total pembayaran</p>
-                    <h2 style={{ margin: "0 0 18px", fontSize: 28, fontWeight: 800 }}>{rp(total)}</h2>
-                    <div
-                      style={{
-                        display: "inline-block",
-                        padding: 12,
-                        border: `1px solid ${LINE}`,
-                        borderRadius: 18,
-                      }}
-                    >
-                      <QrFake size={200} />
-                    </div>
                     <p style={{ margin: "18px 0 4px", fontWeight: 700 }}>Scan dengan aplikasi e-wallet</p>
-                    <p style={{ margin: 0, color: MUTED }}>Menunggu pembayaran...</p>
+                    <p style={{ margin: 0, color: MUTED }}>Menunggu pembayaran... {qrLeft} detik</p>
                   </>
                 )}
+
                 <p style={{ margin: "22px 0 0", fontSize: 12, color: MUTED }}>
                   Simulasi pembayaran (demo), tidak ada uang yang diproses.
                 </p>
@@ -780,7 +997,7 @@ export default function EOrder({
 
               <div style={s.receipt}>
                 <h3 style={s.code}>{order.code}</h3>
-                <Info label={order.place.startsWith("Meja") ? "Meja" : "Cara pesan"} value={order.place} />
+                <Info label={order.mode === "dine" ? "Meja" : "Antrean"} value={order.place} />
                 <Info label="Pesanan" value={order.names} />
                 <Info label="Estimasi" value="Sekitar 15 menit" />
                 <Info label="Total" value={rp(order.total)} />

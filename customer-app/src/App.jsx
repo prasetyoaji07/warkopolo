@@ -59,9 +59,9 @@ function Home({ onAddToCart, onRemoveFromCart, cart }) {
       }
     }
 
-    loadProducts(); // panggil sekali saat halaman dibuka
-    const interval = setInterval(loadProducts, 5000); // ulangi tiap 5 detik
-    return () => clearInterval(interval); // bersihkan saat komponen ditutup
+    loadProducts();
+    const interval = setInterval(loadProducts, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -175,6 +175,38 @@ function App() {
     }
     setLastOrderId(null);
   };
+
+  // Cek berkala: kalau pesanan terakhir sudah tidak aktif (selesai), hapus tombol status
+  useEffect(() => {
+    if (!lastOrderId) return;
+    let batal = false;
+
+    async function cekStatus() {
+      try {
+        const res = await fetch(`${API}/orders?status=aktif`);
+        if (!res.ok) return;
+        const aktif = await res.json();
+        const masihAktif = aktif.some((o) => String(o.id) === String(lastOrderId));
+        if (!masihAktif && !batal) {
+          try {
+            localStorage.removeItem(LAST_ORDER_KEY);
+          } catch {
+            // abaikan
+          }
+          setLastOrderId(null);
+        }
+      } catch {
+        // backend tidak terjangkau: jangan hapus apa-apa
+      }
+    }
+
+    cekStatus();
+    const interval = setInterval(cekStatus, 5000);
+    return () => {
+      batal = true;
+      clearInterval(interval);
+    };
+  }, [lastOrderId]);
 
   const addToCart = (item) => {
     setCart((prev) => {

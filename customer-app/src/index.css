@@ -182,3 +182,17 @@ button, input {
     gap: 20px 16px;
   }
 }
+
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
