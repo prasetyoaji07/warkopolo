@@ -2,39 +2,60 @@ import { useState } from "react";
 import MenuList from "./components/MenuList";
 import OrderList from "./components/OrderList";
 import BookingList from "./components/BookingList";
+import TableStatus from "./components/TableStatus";
+
+const TABS = [
+  { key: "pesanan", label: "Pesanan" },
+  { key: "booking", label: "Booking" },
+  { key: "menu", label: "Kelola menu" },
+];
 
 function App() {
   const [tab, setTab] = useState("pesanan");
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif" }}>
-      <h1>Kasir Warkopolo</h1>
+    <>
+      <header className="topbar">
+        <h1>Kasir Warkopolo</h1>
+        <nav className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              className={`tab ${tab === t.key ? "on" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={() => setTab("pesanan")}
-          style={{ fontWeight: tab === "pesanan" ? "bold" : "normal" }}
-        >
-          Pesanan
-        </button>{" "}
-        <button
-          onClick={() => setTab("booking")}
-          style={{ fontWeight: tab === "booking" ? "bold" : "normal" }}
-        >
-          Booking
-        </button>{" "}
-        <button
-          onClick={() => setTab("menu")}
-          style={{ fontWeight: tab === "menu" ? "bold" : "normal" }}
-        >
-          Kelola Menu
-        </button>
-      </div>
+      <main className="page">
+        {tab === "pesanan" && (
+          <div className="layout">
+            <OrderList />
+            <aside>
+              <TableStatus />
+            </aside>
+          </div>
+        )}
 
-      {tab === "pesanan" && <OrderList />}
-      {tab === "booking" && <BookingList />}
-      {tab === "menu" && <MenuList />}
-    </div>
+        {tab === "booking" && (
+          <div className="layout">
+            <BookingList />
+            <aside>
+              <TableStatus />
+            </aside>
+          </div>
+        )}
+
+        {tab === "menu" && (
+          <div className="menu-page">
+            <MenuList />
+          </div>
+        )}
+      </main>
+    </>
   );
 }
 

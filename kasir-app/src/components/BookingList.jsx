@@ -29,7 +29,6 @@ function BookingList() {
   }, []);
 
   function formatTanggal(tanggal) {
-    // "2026-10-01" -> "1 Okt 2026"
     const [y, m, d] = String(tanggal).slice(0, 10).split("-").map(Number);
     return new Date(y, m - 1, d).toLocaleDateString("id-ID", {
       day: "numeric",
@@ -51,6 +50,7 @@ function BookingList() {
   }
 
   async function batalkan(b) {
+    if (!window.confirm(`Batalkan booking ${b.nama}?`)) return;
     try {
       await kirim(`${API}/bookings/${b.id}`, "PATCH", { status: "dibatalkan" }, "Booking");
       setError("");
@@ -80,54 +80,61 @@ function BookingList() {
     }
   }
 
-  const kotak = {
-    border: "1px solid #999",
-    padding: 12,
-    marginBottom: 12,
-    maxWidth: 400,
-  };
-
   return (
     <div>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error">{error}</p>}
 
-      <h2>Booking Aktif</h2>
-      {bookings.length === 0 && !error && <p>Belum ada booking aktif.</p>}
+      <h2 className="section-title">Booking aktif ({bookings.length})</h2>
+      <div className="card">
+        {bookings.length === 0 && !error && <p className="empty">Belum ada booking aktif.</p>}
 
-      {bookings.map((b) => (
-        <div key={b.id} style={kotak}>
-          <strong>
-            Meja {b.meja_id} - {String(b.jam).slice(0, 5)}
-          </strong>
-          <div>{formatTanggal(b.tanggal)}</div>
-          <div>
-            {b.nama} ({b.no_hp})
+        {bookings.map((b) => (
+          <div key={b.id} className="booking">
+            <div className="booking-top">
+              <strong>
+                Meja {b.meja_id} · {String(b.jam).slice(0, 5)}
+              </strong>
+              <span className="muted">{b.jumlah_orang} orang</span>
+            </div>
+            <div className="muted">{formatTanggal(b.tanggal)}</div>
+            <div className="muted">
+              {b.nama} · {b.no_hp}
+            </div>
+            <div className="booking-actions">
+              <button className="btn btn-primary" onClick={() => customerDatang(b)}>
+                Customer datang
+              </button>
+              <button className="btn btn-danger" onClick={() => batalkan(b)}>
+                Batalkan
+              </button>
+            </div>
           </div>
-          <div>{b.jumlah_orang} orang</div>
+        ))}
+      </div>
 
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => customerDatang(b)}>Customer datang</button>{" "}
-            <button onClick={() => batalkan(b)}>Batalkan</button>
+      <h2 className="section-title">Tamu di meja ({duduk.length})</h2>
+      <div className="card">
+        {duduk.length === 0 && !error && (
+          <p className="empty">Belum ada tamu booking yang sedang duduk.</p>
+        )}
+
+        {duduk.map((d) => (
+          <div key={d.meja_id} className="booking">
+            <div className="booking-top">
+              <strong>
+                Meja {d.meja_id} · datang {d.jam_datang}
+              </strong>
+              <span className="muted">{d.tamu || "-"}</span>
+            </div>
+            <div className="muted">Otomatis kosong dalam {d.sisa_menit} menit</div>
+            <div className="booking-actions">
+              <button className="btn" onClick={() => customerSelesai(d.meja_id)}>
+                Customer selesai
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-
-      <h2 style={{ marginTop: 32 }}>Tamu di Meja (dari booking)</h2>
-      {duduk.length === 0 && !error && <p>Belum ada tamu booking yang sedang duduk.</p>}
-
-      {duduk.map((d) => (
-        <div key={d.meja_id} style={kotak}>
-          <strong>
-            Meja {d.meja_id} - datang {d.jam_datang}
-          </strong>
-          <div>{d.tamu || "-"}</div>
-          <div>Otomatis kosong dalam {d.sisa_menit} menit</div>
-
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => customerSelesai(d.meja_id)}>Customer selesai</button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

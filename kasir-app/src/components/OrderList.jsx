@@ -27,6 +27,13 @@ const NAMA_TIPE = {
   delivery: "Antar",
 };
 
+// Kelompok warna status: menunggu, dikerjakan, siap
+function kelompok(status) {
+  if (status === "pending") return "st-wait";
+  if (status === "diproses") return "st-work";
+  return "st-ready";
+}
+
 function OrderList() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
@@ -90,54 +97,55 @@ function OrderList() {
   }
 
   return (
-    <div>
-      <h2>Pesanan Aktif</h2>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {orders.length === 0 && !error && <p>Belum ada pesanan aktif.</p>}
+    <section>
+      <h2 className="section-title">Pesanan aktif ({orders.length})</h2>
+      {error && <p className="error">{error}</p>}
+      {orders.length === 0 && !error && (
+        <p className="empty">Belum ada pesanan aktif. Pesanan baru muncul otomatis.</p>
+      )}
 
-      {orders.map((o) => {
-        const tipe = o.tipe_pesanan || "dine";
-        const aksi = ALUR[tipe]?.[o.status];
+      <div className="orders">
+        {orders.map((o) => {
+          const tipe = o.tipe_pesanan || "dine";
+          const aksi = ALUR[tipe]?.[o.status];
+          const grup = kelompok(o.status);
 
-        return (
-          <div
-            key={o.id}
-            style={{
-              border: "1px solid #999",
-              padding: 12,
-              marginBottom: 12,
-              maxWidth: 400,
-            }}
-          >
-            <div style={{ fontSize: 12, color: "#666" }}>
-              Pesanan #{o.id} · {NAMA_TIPE[tipe]} · {formatJam(o.created_at)}
-            </div>
-            <strong>{judulOrder(o)}</strong>
-
-            {tipe !== "dine" && o.no_hp && <div>HP: {o.no_hp}</div>}
-            {tipe === "delivery" && o.alamat && <div>Alamat: {o.alamat}</div>}
-
-            <div>Status: {o.status}</div>
-
-            <ul>
-              {o.items.map((it) => (
-                <li key={it.product_id}>
-                  {it.qty} x {it.nama} (Rp{Number(it.harga).toLocaleString("id-ID")})
-                </li>
-              ))}
-            </ul>
-
-            <strong>Total: Rp{hitungTotal(o.items).toLocaleString("id-ID")}</strong>
-
-            {aksi && (
-              <div style={{ marginTop: 8 }}>
-                <button onClick={() => ubahStatus(o.id, aksi[0])}>{aksi[1]}</button>
+          return (
+            <article key={o.id} className={`order ${grup}`}>
+              <div className="order-head">
+                <span className="order-title">{judulOrder(o)}</span>
+                <span className={`badge ${grup}`}>{o.status}</span>
               </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              <div className="order-info">
+                Pesanan #{o.id} · {NAMA_TIPE[tipe]} · {formatJam(o.created_at)}
+              </div>
+
+              {tipe !== "dine" && o.no_hp && <div className="order-info">HP: {o.no_hp}</div>}
+              {tipe === "delivery" && o.alamat && (
+                <div className="order-info">Alamat: {o.alamat}</div>
+              )}
+
+              <ul>
+                {o.items.map((it) => (
+                  <li key={it.product_id}>
+                    {it.qty} × {it.nama}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="order-foot">
+                <strong>Rp{hitungTotal(o.items).toLocaleString("id-ID")}</strong>
+                {aksi && (
+                  <button className="btn btn-primary" onClick={() => ubahStatus(o.id, aksi[0])}>
+                    {aksi[1]}
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
