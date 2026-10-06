@@ -31,7 +31,7 @@ const modes = [
   { key: "delivery", label: "Antar" },
 ];
 const payments = ["QRIS", "OVO", "Di kasir"];
-const MAP_CENTER = [-6.200000, 106.816666];
+const MAP_CENTER = [-6.279486, 107.045714];
 
 const customerIcon = L.divIcon({
   className: "warkopolo-customer-marker",
