@@ -87,13 +87,12 @@ router.post("/", async (req, res) => {
   }
 
   // Validasi pickup / delivery
-  if (
-    (tipe_pesanan === "pickup" ||
-      tipe_pesanan === "delivery") &&
-    (!nama_pelanggan?.trim() || !no_hp?.trim())
+    if (
+    (tipe_pesanan === "pickup" || tipe_pesanan === "delivery") &&
+    !/^\d{9,15}$/.test(String(no_hp).trim())
   ) {
     return res.status(400).json({
-      error: "nama_pelanggan dan no_hp wajib diisi",
+      error: "no_hp harus berupa 9 sampai 15 angka",
     });
   }
 

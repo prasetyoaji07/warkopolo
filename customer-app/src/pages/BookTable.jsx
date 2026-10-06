@@ -1,3 +1,4 @@
+import { bersihkanTelepon, teleponValid } from "../utils/telepon";
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config";
 
@@ -530,7 +531,7 @@ function BookTable() {
     timeValid &&
     selected &&
     nama.trim() &&
-    noHp.trim() &&
+    teleponValid(noHp) &&
     !sending;
 
   /* ===== Lanjut ke review ===== */
@@ -2100,11 +2101,10 @@ function BookTable() {
                   style={input}
                   placeholder="Nomor HP"
                   inputMode="tel"
+                  maxLength={15}
                   value={noHp}
                   onChange={(e) =>
-                    setNoHp(
-                      e.target.value
-                    )
+                    setNoHp(bersihkanTelepon(e.target.value))
                   }
                 />
 
@@ -2201,8 +2201,8 @@ function BookTable() {
                     : !selected
                     ? "Pilih meja dulu"
                     : !nama.trim() ||
-                      !noHp.trim()
-                    ? "Isi nama dan nomor HP"
+                      !teleponValid(noHp)
+                    ? "Isi nama dan nomor HP (9-15 angka)"
                     : "Lanjutkan"}
                 </button>
               </>

@@ -43,6 +43,9 @@ router.post("/", async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal || "") || !/^\d{2}:\d{2}$/.test(jam || "")) {
     return res.status(400).json({ error: "format tanggal YYYY-MM-DD dan jam HH:MM" });
   }
+    if (!/^\d{9,15}$/.test(String(no_hp).trim())) {
+    return res.status(400).json({ error: "no_hp harus berupa 9 sampai 15 angka" });
+  }
 
   let conn;
   try {

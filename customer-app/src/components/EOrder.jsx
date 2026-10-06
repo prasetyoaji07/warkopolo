@@ -3,6 +3,7 @@ import { tables as layout } from "../data/tables";
 import FloorPlan from "./FloorPlan";
 import { API } from "../config";
 import { img } from "../data/data";
+import { bersihkanTelepon } from "../utils/telepon";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 
@@ -785,14 +786,15 @@ export default function EOrder({
                       <label style={s.label} htmlFor="eo-hp">
                         Nomor HP
                       </label>
-                      <input
+                     <input
                         id="eo-hp"
                         style={s.field}
                         type="tel"
                         inputMode="numeric"
+                        maxLength={15}
                         placeholder="08xxxxxxxxxx"
                         value={noHp}
-                        onChange={(e) => setNoHp(e.target.value)}
+                        onChange={(e) => setNoHp(bersihkanTelepon(e.target.value))}
                       />
 
                       {mode === "delivery" && (
