@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, Link, useParams, useOutletContext } from "react-router-dom";
 import { menu, rp } from "../data/menu";
+import { img } from "../data/data";
 import MenuCard, { ItemIcon } from "../components/MenuCard";
 import CartPanel, { CartBar } from "../components/CartPanel";
 import { API } from "../config";
@@ -42,11 +43,12 @@ function Menu() {
   const items = products
     .filter((p) => String(p.kategori).toLowerCase() === kategori)
     .map((p) => ({
-      id: p.id,
-      name: p.nama,
-      desc: data.items.find((i) => i.name === p.nama)?.desc ?? "",
-      price: Number(p.harga),
-    }));
+  id: p.id,
+  name: p.nama,
+  desc: data.items.find((i) => i.name === p.nama)?.desc ?? "",
+  price: Number(p.harga),
+  image: p.gambar ? img(p.gambar.split(".")[0]) : undefined,
+}));
 
   const cheapest = items.length > 0 ? Math.min(...items.map((i) => i.price)) : 0;
 
